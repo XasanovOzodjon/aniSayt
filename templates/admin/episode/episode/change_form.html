@@ -1,0 +1,7 @@
+{% extends "admin/change_form.html" %}
+{% block content %}
+    <script id="animes-data" type="application/json">
+        [{% for a in animes %}{"id": {{ a.id }}, "title": "{{ a.title }}"}{% if not forloop.last %},{% endif %}{% endfor %}]
+    </script>
+    {{ block.super }}
+{% endblock %}
