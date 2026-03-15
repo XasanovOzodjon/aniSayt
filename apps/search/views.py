@@ -8,8 +8,8 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 
-from anime.models import Anime, Ganre
-from person.models import Person
+from apps.anime.models import Anime, Ganre
+from apps.person.models import Person
 from .serializers import AnimeSearchSerializer, PersonSearchSerializer, CombinedSearchSerializer
 
 # Minimal o'xshashlik chegarasi (0.0 - 1.0)

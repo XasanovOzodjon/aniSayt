@@ -1,5 +1,5 @@
 from django.db import models
-from anime.models import Anime
+from apps.anime.models import Anime
 
 
 class Person(models.Model):

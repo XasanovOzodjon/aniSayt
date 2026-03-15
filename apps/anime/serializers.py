@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import Anime, Season, Ganre
-from episode.serializers import EpisodeSerializer
+from apps.episode.serializers import EpisodeSerializer
 
 
 class GanreSerializer(serializers.ModelSerializer):

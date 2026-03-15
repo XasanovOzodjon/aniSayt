@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.http import JsonResponse
 from django.urls import path
 from .models import Episode, Video
-from anime.models import Season, Anime
+from apps.anime.models import Season, Anime
 from modeltranslation.admin import TranslationAdmin
 
 

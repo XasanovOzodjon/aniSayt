@@ -26,10 +26,10 @@ urlpatterns = [
 ]
 
 urlpatterns += i18n_patterns(
-    path("api/", include("anime.urls")),
-    path("api/", include("episode.urls")),
-    path("api/", include("search.urls")),
-    path("api/", include("person.urls")),
+    path("api/", include("apps.anime.urls")),
+    path("api/", include("apps.episode.urls")),
+    path("api/", include("apps.search.urls")),
+    path("api/", include("apps.person.urls")),
 )
 
 if settings.DEBUG:

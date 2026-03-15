@@ -1,9 +1,9 @@
 from django.apps import AppConfig
 
 
-class AnimeConfig(AppConfig):
+class PersonConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'anime'
+    name = 'apps.person'
     
     def ready(self):
-        import anime.translation
+        import apps.person.translation

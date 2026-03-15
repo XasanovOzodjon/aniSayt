@@ -3,8 +3,8 @@ from django.apps import AppConfig
 
 class EpisodeConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'episode'
+    name = 'apps.episode'
 
     def ready(self):
-        import episode.signals
-        import episode.translation
+        import apps.episode.signals
+        import apps.episode.translation
