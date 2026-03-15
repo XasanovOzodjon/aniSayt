@@ -7,3 +7,4 @@ class EpisodeConfig(AppConfig):
 
     def ready(self):
         import episode.signals
+        import episode.translation

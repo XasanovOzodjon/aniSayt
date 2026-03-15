@@ -3,6 +3,7 @@ from django.http import JsonResponse
 from django.urls import path
 from .models import Episode, Video
 from anime.models import Season, Anime
+from modeltranslation.admin import TranslationAdmin
 
 
 class VideoInline(admin.TabularInline):
@@ -11,7 +12,7 @@ class VideoInline(admin.TabularInline):
 
 
 @admin.register(Episode)
-class EpisodeAdmin(admin.ModelAdmin):
+class EpisodeAdmin(TranslationAdmin):
     inlines = [VideoInline]
     list_display = ["__str__", "season", "number"]
     list_filter = ["season__anime"]
