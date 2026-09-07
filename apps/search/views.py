@@ -6,9 +6,10 @@ from django.contrib.postgres.search import (
 )
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import serializers, status
+from drf_spectacular.utils import extend_schema, OpenApiParameter, inline_serializer
 
-from apps.anime.models import Anime, Ganre
+from apps.anime.models import Anime, Genre
 from apps.person.models import Person
 from .serializers import AnimeSearchSerializer, PersonSearchSerializer, CombinedSearchSerializer
 
@@ -29,6 +30,14 @@ class AnimeSearchView(APIView):
     GET /api/search/anime/?genre=action   ← faqat janr filter
     """
 
+    @extend_schema(
+        tags=["Search"],
+        parameters=[
+            OpenApiParameter(name="q", type=str, required=False, description="Search query (fuzzy)"),
+            OpenApiParameter(name="genre", type=str, required=False, description="Genre filter"),
+        ],
+        responses={200: AnimeSearchSerializer(many=True)},
+    )
     def get(self, request):
         q = request.query_params.get("q", "").strip()
         genre = request.query_params.get("genre", "").strip()
@@ -39,7 +48,7 @@ class AnimeSearchView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        queryset = Anime.objects.prefetch_related("ganres")
+        queryset = Anime.objects.prefetch_related("genres")
 
         if q:
             queryset = (
@@ -59,7 +68,7 @@ class AnimeSearchView(APIView):
             )
 
         if genre:
-            queryset = queryset.filter(ganres__name__icontains=genre).distinct()
+            queryset = queryset.filter(genres__name__icontains=genre).distinct()
 
         serializer = AnimeSearchSerializer(queryset, many=True, context={"request": request})
         return Response({
@@ -78,6 +87,14 @@ class PersonSearchView(APIView):
     GET /api/search/person/?q=sakura&anime_id=1
     """
 
+    @extend_schema(
+        tags=["Search"],
+        parameters=[
+            OpenApiParameter(name="q", type=str, required=False, description="Search query (fuzzy)"),
+            OpenApiParameter(name="anime_id", type=int, required=False, description="Filter by anime ID"),
+        ],
+        responses={200: PersonSearchSerializer(many=True)},
+    )
     def get(self, request):
         q = request.query_params.get("q", "").strip()
         anime_id = request.query_params.get("anime_id", "").strip()
@@ -133,6 +150,14 @@ class CombinedSearchView(APIView):
     GET /api/search/?q=naruto&genre=action
     """
 
+    @extend_schema(
+        tags=["Search"],
+        parameters=[
+            OpenApiParameter(name="q", type=str, required=False, description="Search query (fuzzy)"),
+            OpenApiParameter(name="genre", type=str, required=False, description="Genre filter"),
+        ],
+        responses={200: CombinedSearchSerializer},
+    )
     def get(self, request):
         q = request.query_params.get("q", "").strip()
         genre = request.query_params.get("genre", "").strip()
@@ -144,7 +169,7 @@ class CombinedSearchView(APIView):
             )
 
         # --- Anime ---
-        anime_qs = Anime.objects.prefetch_related("ganres")
+        anime_qs = Anime.objects.prefetch_related("genres")
         if q:
             anime_qs = (
                 anime_qs
@@ -162,7 +187,7 @@ class CombinedSearchView(APIView):
                 .order_by("-similarity")
             )
         if genre:
-            anime_qs = anime_qs.filter(ganres__name__icontains=genre).distinct()
+            anime_qs = anime_qs.filter(genres__name__icontains=genre).distinct()
 
         # --- Person ---
         person_qs = Person.objects.select_related("anime")
@@ -200,6 +225,15 @@ class GenreListView(APIView):
     GET /api/search/genres/
     """
 
+    @extend_schema(
+        tags=["Search"],
+        responses={200: inline_serializer(
+            name="GenreListResponse",
+            fields={
+                "results": serializers.ListField(child=serializers.DictField()),
+            },
+        )},
+    )
     def get(self, request):
-        genres = Ganre.objects.values("id", "name").order_by("name")
+        genres = Genre.objects.values("id", "name").order_by("name")
         return Response({"results": list(genres)})

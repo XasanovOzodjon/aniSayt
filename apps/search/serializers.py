@@ -1,20 +1,16 @@
 from rest_framework import serializers
-from apps.anime.models import Anime, Ganre
+from apps.anime.models import Anime
+from apps.anime.serializers import GenreSerializer
 from apps.person.models import Person
-
-
-class GanreSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Ganre
-        fields = ["id", "name"]
+from drf_spectacular.utils import extend_schema_field
 
 
 class AnimeSearchSerializer(serializers.ModelSerializer):
-    ganres = GanreSerializer(many=True, read_only=True)
+    genres = GenreSerializer(many=True, read_only=True)
 
     class Meta:
         model = Anime
-        fields = ["id", "title", "discription", "poster", "release_year", "ganres"]
+        fields = ["id", "title", "description", "poster", "genres"]
 
 
 class PersonSearchSerializer(serializers.ModelSerializer):
@@ -31,6 +27,7 @@ class CombinedSearchSerializer(serializers.Serializer):
     persons = PersonSearchSerializer(many=True)
     total = serializers.SerializerMethodField()
 
+    @extend_schema_field(serializers.DictField())
     def get_total(self, obj):
         return {
             "animes": len(obj["animes"]),

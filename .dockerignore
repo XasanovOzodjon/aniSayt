@@ -1,0 +1,17 @@
+.venv
+.git
+.gitignore
+__pycache__
+*.pyc
+.DS_Store
+Untitled
+.agents
+.scratch
+media
+staticfiles
+*.sqlite3
+.env
+docs
+skills-lock.json
+AGENTS.md
+CONTEXT.md

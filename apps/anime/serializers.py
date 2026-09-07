@@ -1,26 +1,26 @@
 from rest_framework import serializers
-from .models import Anime, Season, Ganre
+from .models import Anime, Season, Genre
 from apps.episode.serializers import EpisodeSerializer
 
 
-class GanreSerializer(serializers.ModelSerializer):
+class GenreSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Ganre
+        model = Genre
         fields = ["id", "name"]
 
 
 class SeasonSerializer(serializers.ModelSerializer):
     episodes = EpisodeSerializer(many=True, read_only=True)
-    
+
     class Meta:
         model = Season
         fields = ["id", "number", "release_date", "episodes"]
 
 
 class AnimeSerializer(serializers.ModelSerializer):
-    ganres = GanreSerializer(many=True, read_only=True)
+    genres = GenreSerializer(many=True, read_only=True)
     seasons = SeasonSerializer(many=True, read_only=True)
 
     class Meta:
         model = Anime
-        fields = ["id", "title", "description", "poster", "ganres", "seasons"]
+        fields = ["id", "title", "description", "poster", "genres", "seasons"]
