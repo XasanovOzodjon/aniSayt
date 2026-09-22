@@ -61,14 +61,8 @@
       opacity: 1;
       pointer-events: auto;
     }
-    .video-wrapper.is-playing:not(.show-ui) .custom-controls {
-      opacity: 1;
-      pointer-events: auto;
-      background: transparent;
-    }
-    .video-wrapper.is-playing:not(.show-ui) .controls-row {
-      opacity: 0;
-      pointer-events: none;
+    .video-wrapper.is-playing:not(.show-ui) {
+      cursor: none;
     }
     .video-wrapper:not(.has-started) .player-age { pointer-events: none; }
     .player-hud-top {
@@ -765,6 +759,7 @@ let currentEpIndex = 0;
 let currentEpisodeId = episodeId;
 let nextWatchPath = '';
 let hudTimer = null;
+let waitSpin = 0;
 let started = false;
 let resumeAt = 0;
 let resumeApplied = false;
@@ -784,11 +779,17 @@ document.getElementById('epScrim')?.addEventListener('click', () => setSheet(fal
 document.getElementById('bigPlay')?.addEventListener('click', (e) => { e.stopPropagation(); togglePlay(); });
 document.getElementById('shareBtn')?.addEventListener('click', (e) => { e.stopPropagation(); shareNow(); });
 
+function hideHud() {
+  wrap.classList.remove('show-ui');
+  document.getElementById('qualityDropdown')?.classList.remove('show');
+  document.getElementById('speedDropdown')?.classList.remove('show');
+}
 function pokeHud() {
   wrap.classList.add('show-ui');
+  wrap.style.cursor = '';
   clearTimeout(hudTimer);
   if (!video.paused && started) {
-    hudTimer = setTimeout(() => wrap.classList.remove('show-ui'), 2800);
+    hudTimer = setTimeout(hideHud, 5000);
   }
 }
 
@@ -870,10 +871,15 @@ function setQuality(level, el) {
 }
 video.addEventListener('waiting', () => {
   if (!started) return;
-  document.getElementById('playerLoading').style.display = 'flex';
-  if (window.PartyRoom?.active) PartyRoom.noteBuffer(true);
+  clearTimeout(waitSpin);
+  waitSpin = setTimeout(() => {
+    if (video.paused) return;
+    document.getElementById('playerLoading').style.display = 'flex';
+    if (window.PartyRoom?.active) PartyRoom.noteBuffer(true);
+  }, 500);
 });
 video.addEventListener('canplay', () => {
+  clearTimeout(waitSpin);
   document.getElementById('playerLoading').style.display = 'none';
   trySeekResume();
   if (window.PartyRoom?.active) PartyRoom.noteBuffer(false);
@@ -888,8 +894,10 @@ video.addEventListener('seeked', () => {
   }
 });
 video.addEventListener('playing', () => {
+  clearTimeout(waitSpin);
   document.getElementById('playerLoading').style.display = 'none';
   markPlaying(true);
+  pokeHud();
 });
 video.addEventListener('pause', () => {
   markPlaying(false);
@@ -1316,6 +1324,12 @@ wrap.addEventListener('click', (e) => {
 });
 wrap.addEventListener('mousemove', pokeHud);
 wrap.addEventListener('touchstart', pokeHud, { passive: true });
+wrap.addEventListener('mouseleave', () => {
+  if (!video.paused && started) {
+    clearTimeout(hudTimer);
+    hudTimer = setTimeout(hideHud, 5000);
+  }
+});
 const progressWrap = document.getElementById('progressWrap');
 progressWrap.addEventListener('click', (e) => { e.stopPropagation(); seekFromEvent(e); });
 progressWrap.addEventListener('touchstart', (e) => { e.stopPropagation(); seekFromEvent(e); }, { passive: true });
