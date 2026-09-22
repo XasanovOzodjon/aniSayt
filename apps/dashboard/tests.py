@@ -357,6 +357,35 @@ class IngestProgressTests(TestCase):
         self.assertEqual(get_progress(99)['progress'], 40)
         self.assertEqual(get_progress(99)['stage'], 's3')
 
+    def test_hls_disk_full_keeps_file_and_does_not_look_like_download_failure(self):
+        from apps.anime.models import Season
+        from apps.episode.ingest import ingest_video
+
+        anime = Anime.objects.create(
+            title='Disk', description='Tavsif', kind='film', poster=_tiny_gif(),
+        )
+        season = Season.objects.create(anime=anime, number=1, release_date=2026)
+        episode = Episode.objects.create(season=season, number=1, title='1-qism')
+        video = Video.objects.create(
+            episode=episode, language='uz', source_url='https://example.com/film.mp4',
+        )
+        video.video.save(
+            'clip.mp4',
+            SimpleUploadedFile('clip.mp4', b'0' * 2048, content_type='video/mp4'),
+            save=True,
+        )
+        with patch(
+            'apps.episode.ingest.convert_to_hls',
+            side_effect=OSError(122, 'Disk quota exceeded'),
+        ):
+            ingest_video(video.pk)
+        video.refresh_from_db()
+        self.assertTrue(video.video)
+        self.assertFalse(video.hls_path)
+        self.assertTrue(video.ingest_error)
+        self.assertNotEqual(video.ingest_error, 'Videoni yuklab bo‘lmadi')
+        self.assertIn('HLS', video.ingest_error)
+
 
 class ProfileReportDashTests(TestCase):
     def setUp(self):

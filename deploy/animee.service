@@ -7,6 +7,8 @@ User=ubuntu
 Group=ubuntu
 WorkingDirectory=/opt/animee
 EnvironmentFile=/opt/animee/.env
+Environment=TMPDIR=/opt/animee/scratch
+Environment=INGEST_SCRATCH=/opt/animee/scratch
 ExecStart=/opt/animee/.venv/bin/daphne -b 127.0.0.1 -p 8000 core.asgi:application
 Restart=always
 RestartSec=3

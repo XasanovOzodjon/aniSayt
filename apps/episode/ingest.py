@@ -1,4 +1,5 @@
 import ipaddress
+import logging
 import mimetypes
 import os
 import shutil
@@ -6,6 +7,7 @@ import socket
 import subprocess
 import tempfile
 from contextlib import contextmanager
+from pathlib import Path
 from urllib.parse import urlparse
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
@@ -14,6 +16,8 @@ from django.core.cache import cache
 from django.core.files import File
 
 from apps.main import object_storage as store
+
+logger = logging.getLogger(__name__)
 
 MAX_DOWNLOAD_BYTES = 4 * 1024 * 1024 * 1024
 CHUNK = 1024 * 1024
@@ -84,6 +88,18 @@ def filename_from_url(url: str) -> str:
 PROGRESS_TTL = 6 * 3600
 
 
+def scratch_dir():
+    """Disk-backed temp for Masters/HLS. /tmp is often a small RAM disk on EC2."""
+    raw = (
+        getattr(settings, 'INGEST_SCRATCH', '')
+        or os.environ.get('INGEST_SCRATCH', '')
+        or tempfile.gettempdir()
+    )
+    path = Path(raw)
+    path.mkdir(parents=True, exist_ok=True)
+    return str(path)
+
+
 def set_progress(pk, pct, stage=''):
     if not pk:
         return
@@ -137,7 +153,11 @@ def download_source(url: str, on_progress=None) -> tuple[str, str]:
                 on_progress=on_progress,
             )
             return key, name
-        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(name)[1] or '.mp4')
+        tmp = tempfile.NamedTemporaryFile(
+            delete=False,
+            suffix=os.path.splitext(name)[1] or '.mp4',
+            dir=scratch_dir(),
+        )
         written = 0
         with open(tmp.name, 'wb') as out:
             while True:
@@ -211,7 +231,7 @@ def local_source_path(fieldfile):
     except (NotImplementedError, ValueError):
         pass
     suffix = os.path.splitext(getattr(fieldfile, 'name', '') or '')[1] or '.mp4'
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix, dir=scratch_dir())
     try:
         fieldfile.open('rb')
         for chunk in fieldfile.chunks():
@@ -243,21 +263,12 @@ def convert_to_hls(instance):
     with local_source_path(instance.video) as video_path:
         if not video_path:
             return
-        output_dir = tempfile.mkdtemp(prefix=f'animee-hls-{instance.id}-')
+        output_dir = tempfile.mkdtemp(prefix=f'animee-hls-{instance.id}-', dir=scratch_dir())
         try:
             output_file = os.path.join(output_dir, 'master.m3u8')
-            cmd = [
-                'ffmpeg', '-y', '-threads', '1', '-i', video_path,
-                '-preset', 'veryfast',
-                '-threads', '1',
-                '-g', '48',
-                '-keyint_min', '48',
-                '-sc_threshold', '0',
-                '-force_key_frames', 'expr:gte(t,n_forced*4)',
+            hls_tail = [
                 '-map', '0:v',
                 '-map', '0:a?',
-                '-c:a', 'aac',
-                '-ac', '2',
                 '-f', 'hls',
                 '-hls_time', '4',
                 '-hls_list_size', '0',
@@ -265,11 +276,41 @@ def convert_to_hls(instance):
                 '-hls_playlist_type', 'vod',
                 output_file,
             ]
-            try:
-                result = subprocess.run(cmd, capture_output=True, timeout=3600)
-                ok = result.returncode == 0 and os.path.isfile(output_file)
-            except (OSError, subprocess.TimeoutExpired):
-                ok = False
+            copy_cmd = [
+                'ffmpeg', '-y', '-threads', '1', '-i', video_path,
+                '-c:v', 'copy', '-c:a', 'aac', '-ac', '2',
+                *hls_tail,
+            ]
+            transcode_cmd = [
+                'ffmpeg', '-y', '-threads', '1', '-i', video_path,
+                '-preset', 'veryfast',
+                '-threads', '1',
+                '-g', '48',
+                '-keyint_min', '48',
+                '-sc_threshold', '0',
+                '-force_key_frames', 'expr:gte(t,n_forced*4)',
+                '-c:a', 'aac',
+                '-ac', '2',
+                *hls_tail,
+            ]
+
+            def run_ffmpeg(cmd):
+                try:
+                    result = subprocess.run(cmd, capture_output=True, timeout=3600)
+                    return result.returncode == 0 and os.path.isfile(output_file)
+                except (OSError, subprocess.TimeoutExpired):
+                    return False
+
+            def clear_out():
+                for name in os.listdir(output_dir):
+                    path = os.path.join(output_dir, name)
+                    if os.path.isfile(path):
+                        os.unlink(path)
+
+            ok = run_ffmpeg(copy_cmd)
+            if not ok:
+                clear_out()
+                ok = run_ffmpeg(transcode_cmd)
             if ok and store.s3_enabled():
                 _upload_hls_dir(instance.id, output_dir)
                 instance.hls_path = store.media_hls_url(instance.id)
@@ -316,6 +357,17 @@ def ingest_video(pk):
     except IngestError as exc:
         Video.objects.filter(pk=pk).update(ingest_error=exc.message[:255])
         set_progress(pk, 0, 'error')
+    except OSError:
+        logger.exception('ingest disk error pk=%s', pk)
+        Video.objects.filter(pk=pk).update(ingest_error='Videoni HLS qilib bo‘lmadi')
+        set_progress(pk, 0, 'error')
     except Exception:
-        Video.objects.filter(pk=pk).update(ingest_error='Videoni yuklab bo‘lmadi')
+        logger.exception('ingest failed pk=%s', pk)
+        row = Video.objects.filter(pk=pk).first()
+        msg = (
+            'Videoni HLS qilib bo‘lmadi'
+            if row and row.video
+            else 'Videoni yuklab bo‘lmadi'
+        )
+        Video.objects.filter(pk=pk).update(ingest_error=msg)
         set_progress(pk, 0, 'error')
