@@ -1,0 +1,478 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Kirish — Animee</title>
+  <link rel="stylesheet" href="{% static 'css/global.css' %}?v=animee120"/>
+</head>
+<body>
+{% include "partials/nav.html" with active="auth" %}
+
+<div class="auth-shell">
+  <section class="auth-stage" aria-label="Katalog posterlari">
+    {% for slide in slides %}
+    <div class="auth-bloom{% if forloop.first %} is-on{% endif %}" style="background-image:url('{{ slide.poster }}')" data-bloom="{{ forloop.counter0 }}"></div>
+    {% empty %}
+    <div class="auth-bloom is-on"></div>
+    {% endfor %}
+    <div class="auth-vignette"></div>
+    <div class="kanji-watermark">アニメ</div>
+    <div class="auth-deck" id="authDeck">
+      {% for slide in slides %}
+      <button
+        type="button"
+        class="auth-poster"
+        data-i="{{ forloop.counter0 }}"
+        data-title="{{ slide.title }}"
+        data-genres="{{ slide.genres }}"
+        data-year="{{ slide.year }}"
+        aria-label="{{ slide.title }}"
+      >
+        <span class="auth-poster-art" style="background-image:url('{{ slide.poster }}')"></span>
+      </button>
+      {% empty %}
+      <div class="auth-poster is-on">
+        <span class="auth-poster-art" style="background:radial-gradient(circle at 30% 20%, rgba(255,43,214,.45), #120024)"></span>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="auth-stage-meta" id="authMeta">
+      <p class="auth-now"><b id="authIndex">01</b> / <span id="authTotal">{% if slides %}{{ slides|length|stringformat:"02d" }}{% else %}01{% endif %}</span> · hozir katalogda</p>
+      <h1 id="authSlideTitle">{% if slides %}{{ slides.0.title }}{% else %}Katalog ochiq{% endif %}</h1>
+      <p class="auth-slide-jp" id="authSlideJp"></p>
+      <p class="auth-slide-genres" id="authSlideGenres">{% if slides.0.year %}{{ slides.0.year }}{% endif %}{% if slides.0.year and slides.0.genres %} · {% endif %}{% if slides.0.genres %}{{ slides.0.genres }}{% endif %}</p>
+      <div class="auth-progress" aria-hidden="true"><i id="authProgressBar"></i></div>
+    </div>
+    {% if slides|length > 1 %}
+    <button type="button" class="auth-navbtn auth-navbtn-prev" id="authPrev" aria-label="Oldingi poster">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 5l-8 7 8 7"/></svg>
+    </button>
+    <button type="button" class="auth-navbtn auth-navbtn-next" id="authNext" aria-label="Keyingi poster">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5l8 7-8 7"/></svg>
+    </button>
+    {% endif %}
+  </section>
+  <div class="auth-panel" id="authPanel">
+    <div class="auth-card">
+      <p class="auth-kicker" id="authKicker">Hisob</p>
+      <h2 class="auth-heading" id="authHeading">Kirish</h2>
+      <p class="auth-lead" id="authLead">Hisobingizga kiring yoki yangi hisob oching.</p>
+      <div class="auth-tabs">
+        <button type="button" class="auth-tab active" data-tab="login">Kirish</button>
+        <button type="button" class="auth-tab" data-tab="register">Ro‘yxat</button>
+      </div>
+      <p class="auth-error" id="authError"></p>
+
+      <form id="loginForm">
+        <div class="auth-field">
+          <label for="loginUser">Foydalanuvchi nomi</label>
+          <input id="loginUser" name="username" required autocomplete="username"/>
+        </div>
+        <div class="auth-field">
+          <label for="loginPass">Parol</label>
+          <div class="auth-pass-wrap">
+            <input id="loginPass" name="password" type="password" required autocomplete="current-password"/>
+            <button type="button" class="auth-peek" aria-pressed="false" aria-label="Parolni ko‘rsatish">
+              <svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+              <svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 10.6A3 3 0 0012 15a3 3 0 002.4-4.4"/><path d="M9.9 5.1A11 11 0 0112 5c6.5 0 10 7 10 7a18 18 0 01-3.2 3.9"/><path d="M6.1 6.1C3.8 7.8 2 12 2 12s3.5 7 10 7a10 10 0 004.1-.8"/></svg>
+            </button>
+          </div>
+        </div>
+        <button class="btn-primary auth-submit" type="submit" id="loginSubmit">Kirish</button>
+      </form>
+
+      <form id="registerForm" hidden>
+        <div class="auth-field">
+          <label for="regUser">Foydalanuvchi nomi</label>
+          <input id="regUser" name="username" minlength="3" required autocomplete="username"/>
+        </div>
+        <div class="auth-field">
+          <label for="regEmail">Email</label>
+          <input id="regEmail" name="email" type="email" required autocomplete="email"/>
+        </div>
+        <div class="auth-field">
+          <label for="regPass">Parol</label>
+          <div class="auth-pass-wrap">
+            <input id="regPass" name="password" type="password" required minlength="8" autocomplete="new-password"/>
+            <button type="button" class="auth-peek" aria-pressed="false" aria-label="Parolni ko‘rsatish">
+              <svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+              <svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 10.6A3 3 0 0012 15a3 3 0 002.4-4.4"/><path d="M9.9 5.1A11 11 0 0112 5c6.5 0 10 7 10 7a18 18 0 01-3.2 3.9"/><path d="M6.1 6.1C3.8 7.8 2 12 2 12s3.5 7 10 7a10 10 0 004.1-.8"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="auth-field">
+          <label for="regPass2">Parolni tasdiqlang</label>
+          <div class="auth-pass-wrap">
+            <input id="regPass2" name="conform_password" type="password" required autocomplete="new-password"/>
+            <button type="button" class="auth-peek" aria-pressed="false" aria-label="Parolni ko‘rsatish">
+              <svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+              <svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 10.6A3 3 0 0012 15a3 3 0 002.4-4.4"/><path d="M9.9 5.1A11 11 0 0112 5c6.5 0 10 7 10 7a18 18 0 01-3.2 3.9"/><path d="M6.1 6.1C3.8 7.8 2 12 2 12s3.5 7 10 7a10 10 0 004.1-.8"/></svg>
+            </button>
+          </div>
+        </div>
+        <button class="btn-primary auth-submit" type="submit" id="registerSubmit">Ro‘yxatdan o‘tish</button>
+      </form>
+
+      <form id="pinForm" hidden>
+        <p class="auth-pin-copy">Emailingizga yuborilgan 6 xonali kodni kiriting.</p>
+        <div class="pin-row" id="pinRow">
+          <input maxlength="1" inputmode="numeric" autocomplete="one-time-code" aria-label="Kod 1"/>
+          <input maxlength="1" inputmode="numeric" aria-label="Kod 2"/>
+          <input maxlength="1" inputmode="numeric" aria-label="Kod 3"/>
+          <input maxlength="1" inputmode="numeric" aria-label="Kod 4"/>
+          <input maxlength="1" inputmode="numeric" aria-label="Kod 5"/>
+          <input maxlength="1" inputmode="numeric" aria-label="Kod 6"/>
+        </div>
+        <button class="btn-primary auth-submit" type="submit" style="margin-top:1rem">Tasdiqlash</button>
+      </form>
+
+      <div class="auth-alt" id="authAlt">
+        <span class="auth-or">yoki</span>
+        <button class="btn-secondary auth-oauth" type="button" id="googleBtn">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+          </svg>
+          Google orqali kirish
+        </button>
+        <button class="btn-secondary auth-oauth" type="button" id="tgBtn">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+            <circle cx="12" cy="12" r="12" fill="#2AABEE"/>
+            <path fill="#fff" d="M17.2 7.5l-1.8 8.6c-.1.6-.5.8-1 .5l-2.8-2.1-1.3 1.3c-.2.2-.3.3-.6.3l.2-2.9 5.3-4.8c.2-.2 0-.3-.3-.1l-6.6 4.1-2.8-.9c-.6-.2-.6-.6.1-.9l11-4.2c.5-.2 1 .1.6.9z"/>
+          </svg>
+          Telegram orqali kirish
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="{% static 'js/api.js' %}?v=animee90"></script>
+<script>
+(function rememberInvite() {
+  const next = new URLSearchParams(location.search).get('next');
+  if (next) Auth.rememberNext(next);
+})();
+const errEl = document.getElementById('authError');
+const authAlt = document.getElementById('authAlt');
+const showErr = (m) => { errEl.textContent = m || ''; };
+let pendingUid = null;
+let pendingUser = '';
+let pendingEmail = '';
+
+const copy = {
+  login: { kicker: 'Hisob', heading: 'Kirish', lead: 'Hisobingizga kiring yoki yangi hisob oching.' },
+  register: { kicker: 'Hisob', heading: 'Ro‘yxatdan o‘tish', lead: 'Emailga kod yuboramiz — keyin hisobingiz ochiladi.' },
+  pin: { kicker: 'Tasdiqlash', heading: 'Kodni kiriting', lead: 'Emailingizga yuborilgan 6 xonali kodni kiriting.' },
+};
+function setCopy(mode) {
+  const t = { ...copy[mode] };
+  if (mode === 'pin' && pendingEmail) {
+    t.lead = `Kod ${pendingEmail} manziliga yuborildi. 15 daqiqa amal qiladi.`;
+  }
+  document.getElementById('authKicker').textContent = t.kicker;
+  document.getElementById('authHeading').textContent = t.heading;
+  document.getElementById('authLead').textContent = t.lead;
+}
+
+const passWraps = () => [...document.querySelectorAll('.auth-pass-wrap')];
+const resetPeek = () => {
+  passWraps().forEach((wrap) => {
+    wrap.querySelectorAll('input').forEach((f) => { f.type = 'password'; });
+    wrap.querySelectorAll('.auth-peek').forEach((b) => {
+      b.setAttribute('aria-pressed', 'false');
+      b.setAttribute('aria-label', 'Parolni ko‘rsatish');
+    });
+  });
+};
+
+document.querySelectorAll('.auth-peek').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const wrap = btn.closest('.auth-pass-wrap');
+    const field = wrap?.querySelector('input');
+    if (!field) return;
+    const show = field.type === 'password';
+    field.type = show ? 'text' : 'password';
+    btn.setAttribute('aria-pressed', show ? 'true' : 'false');
+    btn.setAttribute('aria-label', show ? 'Parolni yashirish' : 'Parolni ko‘rsatish');
+  });
+});
+
+document.querySelectorAll('.auth-tab').forEach((tab) => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.auth-tab').forEach((t) => t.classList.toggle('active', t === tab));
+    document.getElementById('loginForm').hidden = tab.dataset.tab !== 'login';
+    document.getElementById('registerForm').hidden = tab.dataset.tab !== 'register';
+    document.getElementById('pinForm').hidden = true;
+    authAlt.hidden = false;
+    showErr('');
+    resetPeek();
+    setCopy(tab.dataset.tab);
+  });
+});
+
+const pinInputs = [...document.querySelectorAll('#pinRow input')];
+pinInputs.forEach((input, i) => {
+  input.addEventListener('input', () => {
+    input.value = input.value.replace(/\D/g, '').slice(0, 1);
+    if (input.value && pinInputs[i + 1]) pinInputs[i + 1].focus();
+  });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Backspace' && !input.value && pinInputs[i - 1]) pinInputs[i - 1].focus();
+  });
+  input.addEventListener('paste', (e) => {
+    const text = (e.clipboardData.getData('text') || '').replace(/\D/g, '').slice(0, 6);
+    if (!text) return;
+    e.preventDefault();
+    pinInputs.forEach((el, idx) => { el.value = text[idx] || ''; });
+    pinInputs[Math.min(text.length, 5)].focus();
+  });
+});
+
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  showErr('');
+  const fd = new FormData(e.target);
+  try {
+    const tokens = await API.post('/uz/api/auth/login/', {
+      username: fd.get('username'),
+      password: fd.get('password'),
+    });
+    Auth.setSession(tokens, {
+      username: tokens.username || fd.get('username'),
+      email: tokens.email || '',
+      photo: tokens.photo || '',
+      bio: tokens.bio || '',
+      preferred_audio: tokens.preferred_audio || 'uz',
+      autoplay_next: tokens.autoplay_next !== false,
+      public_profile: tokens.public_profile !== false,
+      via: 'email',
+      is_admin: Boolean(tokens.is_admin),
+      is_moderator: Boolean(tokens.is_moderator),
+      can_dashboard: Boolean(tokens.can_dashboard || tokens.is_admin || tokens.is_moderator),
+    });
+    Auth.goAfterLogin();
+  } catch (err) {
+    if (err.status === 429) {
+      showErr('Biroz kuting...');
+      return;
+    }
+    showErr(err.status === 401 ? 'Login yoki parol noto‘g‘ri.' : (err.message || 'Kirib bo‘lmadi.'));
+  }
+});
+
+document.getElementById('registerForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  showErr('');
+  const fd = new FormData(e.target);
+  if (fd.get('password') !== fd.get('conform_password')) {
+    showErr('Parollar mos kelmadi.');
+    return;
+  }
+  const submitBtn = document.getElementById('registerSubmit');
+  submitBtn.disabled = true;
+  try {
+    const data = await API.post('/uz/api/auth/registar/', {
+      username: fd.get('username'),
+      email: fd.get('email'),
+      password: fd.get('password'),
+      conform_password: fd.get('conform_password'),
+    });
+    pendingUid = data.uid;
+    pendingUser = fd.get('username');
+    pendingEmail = fd.get('email');
+    document.getElementById('registerForm').hidden = true;
+    document.getElementById('pinForm').hidden = false;
+    authAlt.hidden = true;
+    setCopy('pin');
+    pinInputs[0].focus();
+    Utils.toast('Emailga kod yuborildi', 'success');
+  } catch (err) {
+    const p = err.payload || {};
+    const first = p.message || Object.values(p)[0];
+    if (err.status === 503) showErr('Kod yuborilmadi. Keyinroq urinib ko‘ring.');
+    else showErr((Array.isArray(first) ? first[0] : first) || 'Bu login yoki email band.');
+  } finally {
+    submitBtn.disabled = false;
+  }
+});
+
+document.getElementById('pinForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  showErr('');
+  const pincode = pinInputs.map((el) => el.value).join('');
+  if (pincode.length < 6) { showErr('6 xonali kodni to‘liq yozing.'); return; }
+  try {
+    const tokens = await API.post('/uz/api/auth/emailcheck/', {
+      uid: pendingUid,
+      pincode: Number(pincode),
+    });
+    Auth.setSession(tokens, {
+      username: tokens.username || pendingUser || 'user',
+      email: tokens.email || pendingEmail || '',
+      photo: tokens.photo || '',
+      bio: tokens.bio || '',
+      preferred_audio: tokens.preferred_audio || 'uz',
+      autoplay_next: tokens.autoplay_next !== false,
+      public_profile: tokens.public_profile !== false,
+      via: 'email',
+      is_admin: Boolean(tokens.is_admin),
+      is_moderator: Boolean(tokens.is_moderator),
+      can_dashboard: Boolean(tokens.can_dashboard || tokens.is_admin || tokens.is_moderator),
+    });
+    Auth.goAfterLogin();
+  } catch (err) {
+    if (err.status === 401) showErr('Kod noto‘g‘ri.');
+    else if (err.status === 408) showErr('Kod muddati o‘tgan. Qayta urinib ko‘ring.');
+    else if (err.status === 404) showErr('Kod topilmadi. Qayta ro‘yxatdan o‘ting.');
+    else showErr('Kodni tasdiqlab bo‘lmadi.');
+  }
+});
+
+(function showGoogleError() {
+  const q = new URLSearchParams(location.search);
+  if (q.get('google_auth') !== 'error') return;
+  showErr('Google orqali kirib bo‘lmadi.');
+  q.delete('google_auth');
+  history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q.toString() : ''));
+})();
+
+document.getElementById('googleBtn').addEventListener('click', async () => {
+  try {
+    const data = await API.post('/uz/api/auth/google/', {});
+    if (data.google_auth_link) location.href = data.google_auth_link;
+    else Utils.toast('Google orqali kirish hozircha mavjud emas.', 'error');
+  } catch {
+    Utils.toast('Google orqali kirish hozircha ishlamayapti.', 'error');
+  }
+});
+
+document.getElementById('tgBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('tgBtn');
+  btn.disabled = true;
+  try {
+    const start = await API.get(API.endpoints.telegramLogin());
+    if (start.tg_url) window.open(start.tg_url, '_blank');
+    Utils.toast('Telegramda Start bosing — shu yerda kutamiz.', 'info');
+    for (let i = 0; i < 90; i += 1) {
+      await Utils.sleep(2000);
+      let data;
+      try {
+        data = await API.post(API.endpoints.telegramLogin(), { unicID: start.unicID });
+      } catch (err) {
+        showErr(err.payload?.message || 'Telegram tasdiqlanmadi.');
+        btn.disabled = false;
+        return;
+      }
+      if (data.status === 'pending') continue;
+      if (data.access) {
+        Auth.setSession(data, {
+          username: data.username || 'user',
+          email: data.email || '',
+          photo: data.photo || '',
+          bio: data.bio || '',
+          preferred_audio: data.preferred_audio || 'uz',
+          autoplay_next: data.autoplay_next !== false,
+          public_profile: data.public_profile !== false,
+          via: 'telegram',
+          is_admin: Boolean(data.is_admin),
+          is_moderator: Boolean(data.is_moderator),
+          can_dashboard: Boolean(data.can_dashboard || data.is_admin || data.is_moderator),
+        });
+        Auth.goAfterLogin();
+        return;
+      }
+    }
+    showErr('Vaqt tugadi. Qayta urinib ko‘ring.');
+  } catch {
+    Utils.toast('Telegram orqali kirish hozircha ishlamayapti.', 'error');
+  }
+  btn.disabled = false;
+});
+
+(function setupAuthStage() {
+  if (window.matchMedia('(max-width: 960px)').matches) return;
+  const posters = [...document.querySelectorAll('.auth-poster[data-i]')];
+  const blooms = [...document.querySelectorAll('.auth-bloom[data-bloom]')];
+  const titleEl = document.getElementById('authSlideTitle');
+  const jpEl = document.getElementById('authSlideJp');
+  const genreEl = document.getElementById('authSlideGenres');
+  const indexEl = document.getElementById('authIndex');
+  const meta = document.getElementById('authMeta');
+  const bar = document.getElementById('authProgressBar');
+  const n = posters.length;
+  if (!n) return;
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let index = 0;
+  let timer;
+
+  function role(i) {
+    const d = (i - index + n) % n;
+    if (d === 0) return 'is-on';
+    if (d === n - 1) return 'is-prev';
+    if (d === 1) return 'is-next';
+    if (d === 2) return 'is-far';
+    return 'is-gone';
+  }
+
+  function restartBar() {
+    if (!bar) return;
+    bar.classList.remove('is-run');
+    void bar.offsetWidth;
+    if (!reduce) bar.classList.add('is-run');
+  }
+
+  function show(next) {
+    index = (next + n) % n;
+    posters.forEach((el, i) => {
+      el.classList.remove('is-on', 'is-prev', 'is-next', 'is-far', 'is-gone');
+      el.classList.add(role(i));
+    });
+    blooms.forEach((el) => el.classList.toggle('is-on', Number(el.dataset.bloom) === index));
+    const card = posters[index];
+    const name = card?.dataset.title || '';
+    if (titleEl) titleEl.textContent = name;
+    if (jpEl) jpEl.textContent = (typeof Utils !== 'undefined') ? Utils.jp(name) : '';
+    if (genreEl) {
+      const bits = [card?.dataset.year, card?.dataset.genres].filter(Boolean);
+      genreEl.textContent = bits.join(' · ');
+    }
+    if (indexEl) indexEl.textContent = String(index + 1).padStart(2, '0');
+    if (meta) {
+      meta.classList.remove('is-swap');
+      void meta.offsetWidth;
+      meta.classList.add('is-swap');
+    }
+    restartBar();
+  }
+
+  function start() {
+    window.clearInterval(timer);
+    if (n < 2) return;
+    timer = window.setInterval(() => show(index + 1), 5400);
+  }
+
+  posters.forEach((el) => {
+    el.addEventListener('click', () => {
+      show(Number(el.dataset.i));
+      start();
+    });
+  });
+  document.getElementById('authPrev')?.addEventListener('click', () => { show(index - 1); start(); });
+  document.getElementById('authNext')?.addEventListener('click', () => { show(index + 1); start(); });
+  document.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (e.key === 'ArrowLeft') { show(index - 1); start(); }
+    if (e.key === 'ArrowRight') { show(index + 1); start(); }
+  });
+
+  show(0);
+  start();
+})();
+</script>
+</body>
+</html>

@@ -10,8 +10,11 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import sys
+from datetime import timedelta
 from pathlib import Path
 from decouple import config, Csv
+from django.core.exceptions import ImproperlyConfigured
 from django.utils.translation import gettext_lazy as _
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -26,13 +29,31 @@ SECRET_KEY = config('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', cast=bool)
+TESTING = 'test' in sys.argv
+if not DEBUG and not TESTING and len(SECRET_KEY or '') < 50:
+    raise ImproperlyConfigured(
+        'SECRET_KEY kamida 50 belgi bo‘lsin. '
+        'Yangi kalit: python -c "import secrets; print(secrets.token_urlsafe(48))"'
+    )
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', cast=Csv())
+if DEBUG:
+    ALLOWED_HOSTS = list(ALLOWED_HOSTS) + [
+        '.ngrok-free.app',
+        '.ngrok.app',
+        '.ngrok.io',
+        '.ngrok-free.dev',
+        '.ngrok.dev',
+    ]
+
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
 
 
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',
     'modeltranslation',
     'django.contrib.admin',
     'django.contrib.auth',
@@ -45,29 +66,64 @@ INSTALLED_APPS = [
     'apps.person.apps.PersonConfig',
     'apps.search.apps.SearchConfig',
     'apps.users.apps.UsersConfig',
+    'apps.main.apps.MainConfig',
+    'apps.party.apps.PartyConfig',
+    'apps.dashboard.apps.DashboardConfig',
+    'channels',
     'rest_framework',
+    'django_filters',
     'corsheaders',
     'django.contrib.postgres',
+    'drf_spectacular',
 ]
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.locale.LocaleMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'apps.users.middleware.BanGateMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
 ROOT_URLCONF = 'core.urls'
+ASGI_APPLICATION = 'core.asgi.application'
+
+REDIS_URL = config('REDIS_URL', default='').strip()
+if REDIS_URL:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {
+                'hosts': [REDIS_URL],
+            },
+        },
+    }
+else:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels.layers.InMemoryChannelLayer',
+        },
+    }
+
+TURN_URL = config('TURN_URL', default='').strip()
+TURN_URLS = [
+    item.strip()
+    for item in config('TURN_URLS', default='', cast=Csv())
+    if str(item).strip()
+]
+TURN_USERNAME = config('TURN_USERNAME', default='').strip()
+TURN_CREDENTIAL = config('TURN_CREDENTIAL', default='').strip()
 
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -150,6 +206,80 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
+
+def _first_cfg(*names, default=''):
+    for name in names:
+        value = config(name, default='').strip()
+        if value:
+            return value
+    return default
+
+
+AWS_STORAGE_BUCKET_NAME = _first_cfg('AWS_STORAGE_BUCKET_NAME', default='')
+AWS_ACCESS_KEY_ID = _first_cfg('AWS_ACCESS_KEY_ID', 'AWS_S3_ACCESS_KEY_ID')
+AWS_SECRET_ACCESS_KEY = _first_cfg('AWS_SECRET_ACCESS_KEY', 'AWS_S3_SECRET_ACCESS_KEY')
+AWS_S3_REGION_NAME = _first_cfg('AWS_S3_REGION_NAME', default='eu-central-1') or 'eu-central-1'
+AWS_QUERYSTRING_EXPIRE = 6 * 60 * 60
+AWS_S3_READY = False
+
+if (
+    not TESTING
+    and AWS_STORAGE_BUCKET_NAME
+    and AWS_ACCESS_KEY_ID
+    and AWS_SECRET_ACCESS_KEY
+):
+    try:
+        import boto3
+        from botocore.config import Config as BotoConfig
+
+        boto3.client(
+            's3',
+            region_name=AWS_S3_REGION_NAME,
+            aws_access_key_id=AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+            config=BotoConfig(signature_version='s3v4'),
+        ).head_bucket(Bucket=AWS_STORAGE_BUCKET_NAME)
+        AWS_S3_READY = True
+    except Exception:
+        AWS_S3_READY = False
+
+_STATIC_BACKEND = (
+    'whitenoise.storage.CompressedStaticFilesStorage'
+    if not DEBUG and not TESTING
+    else 'django.contrib.staticfiles.storage.StaticFilesStorage'
+)
+if AWS_S3_READY:
+    STORAGES = {
+        'default': {
+            'BACKEND': 'apps.main.object_storage.ProxiedS3Storage',
+            'OPTIONS': {
+                'bucket_name': AWS_STORAGE_BUCKET_NAME,
+                'access_key': AWS_ACCESS_KEY_ID,
+                'secret_key': AWS_SECRET_ACCESS_KEY,
+                'region_name': AWS_S3_REGION_NAME,
+                'file_overwrite': False,
+                'default_acl': None,
+                'querystring_auth': True,
+                'querystring_expire': AWS_QUERYSTRING_EXPIRE,
+                'object_parameters': {'CacheControl': 'public, max-age=86400'},
+                'signature_version': 's3v4',
+            },
+        },
+        'staticfiles': {
+            'BACKEND': _STATIC_BACKEND,
+        },
+    }
+else:
+    STORAGES = {
+        'default': {
+            'BACKEND': 'django.core.files.storage.FileSystemStorage',
+        },
+        'staticfiles': {
+            'BACKEND': _STATIC_BACKEND,
+        },
+    }
 
 STATIC_URL = "static/"
 
@@ -158,10 +288,101 @@ STATICFILES_DIRS = [
 ]
 
 STATIC_ROOT = BASE_DIR / "staticfiles"
- 
-CORS_ALLOW_ALL_ORIGINS = True
+WHITENOISE_USE_FINDERS = DEBUG
+
+if not DEBUG and not TESTING:
+    SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=True, cast=bool)
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    CSRF_COOKIE_SAMESITE = 'Lax'
+    SECURE_HSTS_SECONDS = config('SECURE_HSTS_SECONDS', default=31536000, cast=int)
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_REFERRER_POLICY = 'same-origin'
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+
+
+SITE_URL_LIST = config('SITE_URL', default='http://localhost:8000', cast=Csv())
+SITE_URL = SITE_URL_LIST[0] if SITE_URL_LIST else 'http://localhost:8000'
+CSRF_TRUSTED_ORIGINS = [
+    str(origin).rstrip('/')
+    for origin in SITE_URL_LIST
+    if str(origin).startswith('http')
+]
+if DEBUG:
+    CSRF_TRUSTED_ORIGINS += [
+        'https://*.ngrok-free.app',
+        'http://*.ngrok-free.app',
+        'https://*.ngrok.app',
+        'https://*.ngrok.io',
+        'https://*.ngrok-free.dev',
+        'https://*.ngrok.dev',
+    ]
+
 
 
 REST_FRAMEWORK = {
-    'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend']
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+    ],
+    'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'core.auth.SoftJWTAuthentication',
+    ),
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'EXCEPTION_HANDLER': 'core.exceptions.safe_exception_handler',
 }
+
+AUTH_USER_MODEL = 'users.CustomUser'
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=1),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=30),
+}
+
+
+EMAIL_HOST = config('EMAIL_HOST', default='smtp.gmail.com')
+EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
+EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='') or EMAIL_HOST_USER or 'noreply@animee.uz'
+if EMAIL_HOST_USER and EMAIL_HOST_PASSWORD:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+
+BOT_TOKEN = config('BOT_TOKEN', default='')
+TELEGRAM_BOT_USERNAME = config('TELEGRAM_BOT_USERNAME', default='animeediabot')
+
+GOOGLE_CLIENT_ID=config('GOOGLE_CLIENT_ID')
+GOOGLE_PROJECT_ID=config('GOOGLE_PROJECT_ID')
+GOOGLE_TOKEN_URL=config('GOOGLE_TOKEN_URI')
+GOOGLE_USER_INFO_URL=config('GOOGLE_USER_INFO_URI')
+GOOGLE_CLIENT_SECRET=config('GOOGLE_CLIENT_SECRET')
+GOOGLE_REDIRECT_URL=config('GOOGLE_REDIRECT_URL')
+
+# CORS sozlamalari
+CORS_ALLOWED_ORIGINS = SITE_URL_LIST if isinstance(SITE_URL_LIST, list) else [SITE_URL_LIST]
+
+# Development uchun - production da False qiling
+CORS_ALLOW_ALL_ORIGINS = DEBUG
+CORS_ALLOW_CREDENTIALS = True
+
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Animee',
+    'DESCRIPTION': '',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'SCHEMA_PATH_PREFIX': r'/[a-z]{2}/api',
+    'PREPROCESSING_HOOKS': ['drf_spectacular.hooks.preprocess_exclude_path_format'],
+}
+
+SILENCED_SYSTEM_CHECKS = [
+    'drf_spectacular.W001',
+    'drf_spectacular.W002',
+]

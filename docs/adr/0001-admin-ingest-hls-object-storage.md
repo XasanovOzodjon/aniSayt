@@ -1,0 +1,3 @@
+# Ingest via admin panel or Telegram; play from object storage as HLS
+
+A Master may arrive two ways: upload in the Next.js admin panel, or send/forward from Telegram so an Admin does not download a library that already lives in Telegram and re-upload it. Either way the file is copied into S3 (credentials supplied by the operator via env, never committed) and transcoded into HLS Renditions; development may still use local disk until S3 is configured. Viewers never stream from Telegram — that path is grey-market CDN usage and Bot API links expire. Telegram remains a sign-in method as well as an ingest channel. Only allowlisted Admin telegram ids may ingest.

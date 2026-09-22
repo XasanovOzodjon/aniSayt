@@ -1,0 +1,65 @@
+<div class="sakura" aria-hidden="true">
+  <i class="petal" style="left:8%;animation-duration:11s;animation-delay:-1s"></i>
+  <i class="petal" style="left:22%;animation-duration:14s;animation-delay:-4s;width:8px;height:8px"></i>
+  <i class="petal" style="left:37%;animation-duration:12s;animation-delay:-7s"></i>
+  <i class="petal" style="left:51%;animation-duration:16s;animation-delay:-2s;width:13px;height:13px"></i>
+  <i class="petal" style="left:66%;animation-duration:13s;animation-delay:-9s"></i>
+  <i class="petal" style="left:79%;animation-duration:15s;animation-delay:-5s;width:9px;height:9px"></i>
+  <i class="petal" style="left:91%;animation-duration:12s;animation-delay:-3s"></i>
+</div>
+<nav class="navbar" id="navbar">
+  <a href="{% url 'index' %}" class="navbar-logo">ANI<em>MEE</em> <small>UZ</small></a>
+  <nav class="navbar-nav">
+    <a href="{% url 'index' %}" class="{% if active == 'home' %}active{% endif %}">Bosh sahifa</a>
+    <a href="{% url 'catalog' %}" class="{% if active == 'catalog' %}active{% endif %}">Katalog</a>
+    <a href="{% url 'lists' %}" class="{% if active == 'lists' %}active{% endif %}">Ro‘yxatlar</a>
+    <a href="{% url 'party_lobby' %}" class="{% if active == 'party' %}active{% endif %}">Birgalikda</a>
+    <a href="{% url 'dashboard' %}" id="navDash" class="{% if active == 'dashboard' %}active{% endif %}" hidden>Boshqaruv</a>
+  </nav>
+  <div class="navbar-actions">
+    <button type="button" class="search-trigger" data-open-search>
+      <span class="search-trigger-jp">検索</span>
+      <span class="search-trigger-label">Qidirish</span>
+      <kbd>/</kbd>
+    </button>
+    <a href="{% url 'notices' %}" class="nav-bell" id="navBell" hidden aria-label="Bildirishnomalar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M6 9a6 6 0 0112 0c0 7 2 7 2 9H4c0-2 2-2 2-9"/>
+        <path d="M10 21a2 2 0 004 0"/>
+      </svg>
+      <span class="nav-bell-count" id="navBellCount" hidden></span>
+    </a>
+    <div class="nav-account" id="navAccount" hidden>
+      <button type="button" class="nav-avatar" id="navAvatarBtn" aria-label="Profil menyusi" aria-expanded="false" aria-controls="navMenu">
+        <img id="navAvatarImg" alt="" hidden>
+        <span id="navAvatarLetter" class="nav-avatar-letter">?</span>
+      </button>
+      <div class="nav-menu" id="navMenu" hidden role="menu"></div>
+    </div>
+    <a href="{% url 'auth' %}" class="btn-primary" id="navAuthCta">Kirish</a>
+  </div>
+</nav>
+<nav class="bottom-nav" aria-label="Mobil menyu">
+  <a href="{% url 'index' %}" class="{% if active == 'home' %}active{% endif %}"><span>⌂</span>Bosh</a>
+  <a href="{% url 'catalog' %}" class="{% if active == 'catalog' %}active{% endif %}"><span>▣</span>Katalog</a>
+  <a href="{% url 'party_lobby' %}" class="{% if active == 'party' %}active{% endif %}"><span>◑</span>Birga</a>
+  <button type="button" class="bottom-search" data-open-search><span>◎</span>Qidiruv</button>
+  <a href="{% url 'auth' %}" id="botAuth" class="{% if active == 'profile' or active == 'auth' %}active{% endif %}"><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg></span>Kirish</a>
+</nav>
+{% include "partials/search-portal.html" %}
+<script>
+window.ANIMEE_URLS = {
+  index: "{% url 'index' %}",
+  catalog: "{% url 'catalog' %}",
+  detail: "{% url 'detail' %}",
+  player: "{% url 'player' %}",
+  auth: "{% url 'auth' %}",
+  profile: "{% url 'profile' %}",
+  lists: "{% url 'lists' %}",
+  settings: "{% url 'settings' %}",
+  notices: "{% url 'notices' %}",
+  banned: "{% url 'banned' %}",
+    party: "{% url 'party_lobby' %}",
+  dashboard: "{% url 'dashboard' %}",
+};
+</script>

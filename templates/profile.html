@@ -1,0 +1,811 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Profil — Animee</title>
+  <link rel="stylesheet" href="{% static 'css/global.css' %}?v=animee121"/>
+</head>
+<body>
+{% include "partials/nav.html" with active="profile" %}
+
+<div id="app">
+  <div id="profileRoot"></div>
+</div>
+
+<footer class="footer">
+  <div class="footer-logo">ANI<span>MEE</span></div>
+  <p>animee.uz — anime, drama va kino. © 2026</p>
+</footer>
+
+<script src="{% static 'js/api.js' %}?v=animee90"></script>
+<script>
+const root = document.getElementById('profileRoot');
+const urls = ANIMEE_URLS;
+const viewName = "{{ profile_username|default:''|escapejs }}";
+const TRACK = [0, 10, 25, 50, 100, 250, 500];
+
+function displayName(account) {
+  return (account.first_name || '').trim() || account.username || 'Profil';
+}
+
+function avatarHtml(account, cls) {
+  const photo = Utils.safeUrl(account.photo);
+  const name = Utils.escapeHtml(account.username || '?');
+  const klass = cls || 'profile-avatar';
+  if (photo) return `<div class="${klass}"><img src="${photo}" alt=""></div>`;
+  return `<div class="${klass}">${name.slice(0, 1).toUpperCase()}</div>`;
+}
+
+function ico(svg) {
+  return `<i>${svg}</i>`;
+}
+
+function posterTile(a) {
+  return `
+    <a class="profile-poster" href="${Utils.titleHref(a)}">
+      <img src="${a.poster||''}" alt="" onerror="Utils.imgFallback(this)"/>
+      <span>${Utils.escapeHtml(a.title||'—')}</span>
+    </a>`;
+}
+
+function gate() {
+  root.innerHTML = `
+    <div class="page-container profile-hero">
+      <div class="profile-gate">
+        <p class="search-portal-kicker">Mehmon</p>
+        <h1 class="detail-title" style="font-size:clamp(1.8rem,5vw,2.8rem);margin:.2rem 0 .6rem">Hisobga kiring</h1>
+        <div class="profile-gate-actions">
+          <a class="btn-primary" href="${urls.auth}">Kirish</a>
+          <a class="btn-secondary" href="${urls.catalog}">Katalogga</a>
+        </div>
+      </div>
+    </div>`;
+}
+
+function fmtWhen(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  const p = (n) => String(n).padStart(2, '0');
+  return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()}, ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function fmtDay(iso) {
+  const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return iso ? fmtWhen(iso) : '—';
+  return `${m[3]}.${m[2]}.${m[1]}`;
+}
+
+function streakFlame() {
+  return `<svg viewBox="0 0 24 24" class="profile-streak-svg" aria-hidden="true">
+    <path class="streak-outer" d="M12.1 1.7c-.3 4.1-3.7 6.3-5.7 9.6-1.7 2.8-1.9 6.1.1 8.4 1.6 1.9 4.1 3.1 5.6 3.1s4-1.2 5.6-3.1c2-2.3 1.8-5.6.1-8.4-1.8-2.9-4.6-5.3-5.7-9.6z"/>
+    <path class="streak-inner" d="M12.1 11.1c-1.5 2.3-2.3 3.9-2.3 5.6 0 2.1 1.2 3.5 2.3 3.5s2.3-1.4 2.3-3.5c0-1.7-.8-3.3-2.3-5.6z"/>
+  </svg>`;
+}
+
+function streakChip(account, owner) {
+  const st = account.streak || {};
+  const n = Number(st.current) || 0;
+  const due = Boolean(owner) && !st.today;
+  return `<button type="button" class="profile-streak ${due ? 'is-due' : 'is-today'}" id="streakBtn" aria-label="Streak, ${n} kun">
+    <span class="profile-streak-ico">${streakFlame()}${due ? '<i class="profile-streak-warn">!</i>' : ''}</span>
+    <b>${n}</b>
+  </button>`;
+}
+
+function streakSheet(account, owner) {
+  const st = account.streak || {};
+  const due = Boolean(owner) && !st.today;
+  const current = Number(st.current) || 0;
+  const best = Number(st.best) || 0;
+  const days = Number(st.days) || 0;
+  return `
+    <div class="profile-sheet" id="streakSheet" hidden>
+      <div class="profile-sheet-card profile-streak-card">
+        <button type="button" class="profile-sheet-x" data-close-sheet aria-label="Yopish">×</button>
+        <div class="profile-streak-hero ${due ? 'is-due' : 'is-today'}">
+          <span class="profile-streak-ico">${streakFlame()}${due ? '<i class="profile-streak-warn">!</i>' : ''}</span>
+          <b>${current}</b>
+        </div>
+        <p class="profile-streak-kicker">Streak</p>
+        <p class="profile-streak-lead">Har kuni kamida 30 soniya qism ko‘rsangiz, streak +1.${owner ? ' Bugun hali ko‘rmagan bo‘lsangiz, olov kulrang turadi.' : ''} Kun o‘tkazib yuborilsa ketma-ketlik noldan boshlanadi.</p>
+        <dl class="profile-facts">
+          ${owner ? fact('Bugun', due ? 'Hali yo‘q' : 'Yondi') : ''}
+          ${fact('Streak', `${current} kun`)}
+          ${fact('Boshlangan', fmtDay(st.started_on))}
+          ${fact('Eng uzun streak', `${best} kun`)}
+          ${fact('Jami kunlar', days)}
+        </dl>
+      </div>
+    </div>`;
+}
+
+function isOnline(iso, owner) {
+  if (owner) return true;
+  if (!iso) return false;
+  const d = new Date(iso);
+  return !Number.isNaN(d.getTime()) && (Date.now() - d.getTime() < 15 * 60 * 1000);
+}
+
+function lastSeen(iso, owner) {
+  if (isOnline(iso, owner)) return 'Tarmoqda';
+  if (!iso) return 'Noma’lum';
+  return fmtWhen(iso);
+}
+
+function closeSheets() {
+  root.querySelectorAll('.profile-sheet').forEach((el) => { el.hidden = true; });
+}
+
+function openSheet(id) {
+  closeSheets();
+  const el = document.getElementById(id);
+  if (el) el.hidden = false;
+}
+
+function fact(label, value) {
+  return `<div><dt>${label}</dt><dd>${value}</dd></div>`;
+}
+
+function infoSheet(account, { owner }) {
+  const s = account.stats || {};
+  const name = displayName(account);
+  const role = account.role || 'User';
+  return `
+    <div class="profile-sheet" id="infoSheet" hidden>
+      <div class="profile-sheet-card">
+        <button type="button" class="profile-sheet-x" data-close-sheet aria-label="Yopish">×</button>
+        <h2>Foydalanuvchi haqida</h2>
+        <dl class="profile-facts">
+          ${fact('Ism', Utils.escapeHtml(name))}
+          ${fact('Username', Utils.escapeHtml(account.username || '—'))}
+          ${fact('Guruh', Utils.escapeHtml(role))}
+          ${owner && account.email ? fact('Email', Utils.escapeHtml(account.email)) : ''}
+          ${fact('Status', Utils.escapeHtml(account.status_line || '—'))}
+          ${fact('Ro‘yxatdan o‘tgan', Utils.escapeHtml(fmtWhen(s.joined_at)))}
+          ${fact('Biz bilan kunlar', s.days_with_us ?? 0)}
+          ${fact('Oxirgi kirish', Utils.escapeHtml(lastSeen(s.last_login, owner)))}
+          ${fact('Izohlar', s.comments ?? 0)}
+          ${fact('Ko‘rilgan qismlar', s.episodes_watched ?? 0)}
+          ${fact('O‘zi haqida', Utils.escapeHtml(account.bio || '—'))}
+        </dl>
+      </div>
+    </div>`;
+}
+
+function editSheet(account) {
+  const photo = Utils.safeUrl(account.photo);
+  const banner = Utils.safeUrl(account.banner);
+  const letter = Utils.escapeHtml((account.username || '?').slice(0, 1).toUpperCase());
+  return `
+    <div class="profile-sheet" id="editSheet" hidden>
+      <div class="profile-sheet-card">
+        <button type="button" class="profile-sheet-x" data-close-sheet aria-label="Yopish">×</button>
+        <h2>Profilni tahrirlash</h2>
+        <p class="auth-error" id="editErr"></p>
+        <div class="profile-edit-media">
+          <div class="profile-edit-preview">
+            <span>Avatar</span>
+            <div class="profile-edit-circle">${photo ? `<img src="${photo}" alt="">` : letter}</div>
+            <button type="button" class="btn-secondary" id="pickAvatar">Yuklash</button>
+            <input id="editAvatar" type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden/>
+          </div>
+          <div class="profile-edit-preview">
+            <span>Banner</span>
+            <div class="profile-edit-banner">${banner ? `<img src="${banner}" alt="">` : ''}</div>
+            <button type="button" class="btn-secondary" id="pickBanner">Yuklash</button>
+            <input id="editBanner" type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden/>
+          </div>
+        </div>
+        ${account.banner ? '<p class="settings-hint"><button type="button" class="btn-secondary" id="clearBanner">Bannerni olib tashlash</button></p>' : ''}
+        <form id="editForm" class="dash-form">
+          <div class="profile-toggles">
+            <label class="settings-row">
+              <span>Ko‘ryapman</span>
+              <button type="button" class="settings-toggle" id="togWatch" aria-pressed="${account.show_watching !== false}"><i></i></button>
+            </label>
+            <label class="settings-row">
+              <span>Ochiq profil</span>
+              <button type="button" class="settings-toggle" id="togPublic" aria-pressed="${account.public_profile !== false}"><i></i></button>
+            </label>
+          </div>
+          <label>Status <input name="status_line" maxlength="80" value="${Utils.escapeHtml(account.status_line || '')}"/></label>
+          <label>Ism <input name="first_name" maxlength="80" value="${Utils.escapeHtml(account.first_name || '')}"/></label>
+          <label>Username <input name="username" minlength="3" maxlength="30" required value="${Utils.escapeHtml(account.username || '')}"/></label>
+          <label>Email <input value="${Utils.escapeHtml(account.email || '')}" readonly/></label>
+          <label>O‘zi haqida <textarea name="bio" maxlength="280" rows="3">${Utils.escapeHtml(account.bio || '')}</textarea></label>
+          <div class="dash-inline">
+            <button class="btn-primary" type="submit">Saqlash</button>
+            <a class="btn-secondary" href="${urls.settings}">To‘liq sozlamalar</a>
+          </div>
+        </form>
+      </div>
+    </div>`;
+}
+
+function cropSheet() {
+  return `
+    <div class="profile-sheet profile-crop-sheet" id="cropSheet" hidden>
+      <div class="profile-sheet-card profile-crop-card">
+        <button type="button" class="profile-sheet-x" id="cropCancelX" aria-label="Yopish">×</button>
+        <h2 id="cropTitle">Avatar</h2>
+        <div class="profile-crop-stage">
+          <div class="profile-crop-view is-avatar" id="cropView">
+            <img id="cropImg" alt="" draggable="false"/>
+          </div>
+        </div>
+        <input id="cropZoom" type="range" min="1" max="3" step="0.01" value="1"/>
+        <div class="dash-inline">
+          <button type="button" class="btn-primary" id="cropSave">Yuklash</button>
+          <button type="button" class="btn-secondary" id="cropCancel">Bekor</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function pickerSheet() {
+  return `
+    <div class="profile-sheet" id="pickSheet" hidden>
+      <div class="profile-sheet-card">
+        <button type="button" class="profile-sheet-x" data-close-sheet aria-label="Yopish">×</button>
+        <h2>Sevimliga qo‘shish</h2>
+        <input id="pickSearch" placeholder="Nom yozing..." autocomplete="off"/>
+        <div id="pickResults" class="profile-pick-list"></div>
+      </div>
+    </div>`;
+}
+
+function reportSheet() {
+  const kinds = [
+    ['photo', 'Profil rasmi'],
+    ['banner', 'Banner'],
+    ['nick', 'Nick'],
+    ['bio', 'Tavsif'],
+  ];
+  const reasons = [
+    ['insult', 'Haqorat / Trolling'],
+    ['racism', 'Irqchilik'],
+    ['hate', 'Nafrat nutqi'],
+    ['threat', 'Zo‘ravonlik tahdidi'],
+    ['harassment', 'Jinsiy ta’qib'],
+    ['porn', 'Pornografiya'],
+    ['spam', 'Spam'],
+    ['scam', 'Firibgarlik'],
+    ['impersonation', 'Soxtalik'],
+    ['other', 'Boshqa'],
+  ];
+  return `
+    <div class="profile-sheet" id="reportSheet" hidden>
+      <div class="profile-sheet-card">
+        <button type="button" class="profile-sheet-x" data-close-sheet aria-label="Yopish">×</button>
+        <h2>Shikoyat</h2>
+        <p class="profile-streak-lead">Nimaga shikoyat?</p>
+        <p class="auth-error" id="reportErr"></p>
+        <div class="profile-report-kinds" id="reportKinds">
+          ${kinds.map(([id, label], i) => `<button type="button" class="profile-report-kind" data-kind="${id}" aria-pressed="${i === 0 ? 'true' : 'false'}">${label}</button>`).join('')}
+        </div>
+        <p class="profile-streak-lead">Sabab</p>
+        <div class="profile-report-reasons" id="reportReasons">
+          ${reasons.map(([id, label]) => `<button type="button" class="profile-report-kind" data-reason="${id}" aria-pressed="false">${label}</button>`).join('')}
+        </div>
+        <form id="reportForm" class="dash-form">
+          <label>Izoh <textarea name="note" maxlength="400" rows="3" placeholder="Ixtiyoriy"></textarea></label>
+          <button class="btn-primary" type="submit">Yuborish</button>
+        </form>
+      </div>
+    </div>`;
+}
+
+function favSlots(rows, owner) {
+  const items = (rows || []).slice(0, 5);
+  const slots = [];
+  for (let i = 0; i < 5; i += 1) {
+    const row = items[i];
+    const a = row ? (row.anime || row) : null;
+    if (a) {
+      slots.push(`<a class="profile-fav is-filled" href="${Utils.titleHref(a)}"><img src="${a.poster||''}" alt="" onerror="Utils.imgFallback(this)"/></a>`);
+    } else if (owner) {
+      slots.push('<button type="button" class="profile-fav is-empty" data-pick-fav>+</button>');
+    } else {
+      slots.push('<div class="profile-fav is-empty"></div>');
+    }
+  }
+  return slots.join('');
+}
+
+function trackHtml(watched) {
+  const n = Number(watched) || 0;
+  const top = TRACK[TRACK.length - 1];
+  const pct = Math.max(0, Math.min(100, (n / top) * 100));
+  return `
+    <div class="profile-track">
+      <div class="profile-track-top">
+        <span>Ko‘rilgan qismlar</span>
+        <em>${n} / ${top}</em>
+      </div>
+      <div class="profile-track-bar"><i style="width:${pct}%"></i></div>
+      <div class="profile-track-marks">${TRACK.map((m) => (n >= m ? `<b>${m}</b>` : `<span>${m}</span>`)).join('')}</div>
+    </div>`;
+}
+
+function actionBtn(id, label, svg) {
+  return `
+    <button type="button" class="profile-ico" id="${id}">
+      <span class="label">${label}</span>
+      ${ico(svg)}
+    </button>`;
+}
+
+async function render(account, ctx) {
+  const owner = Boolean(ctx.owner);
+  const privateProfile = Boolean(ctx.privateProfile);
+  let counts = ctx.counts || {};
+  let watching = [];
+  let watchingTotal = 0;
+  let favorite = [];
+  if (!privateProfile) {
+    try {
+      const data = owner
+        ? await Lists.mine()
+        : await Lists.of(account.username);
+      const rows = data.results || [];
+      counts = data.counts || counts;
+      watching = rows.filter((r) => r.status === 'watching');
+      favorite = rows.filter((r) => r.status === 'favorite');
+      watchingTotal = watching.length;
+      watching = watching.slice(0, 10);
+    } catch {}
+  }
+  ctx.counts = counts;
+  const banner = Utils.safeUrl(account.banner);
+  const name = displayName(account);
+  const s = account.stats || {};
+  const online = isOnline(s.last_login, owner);
+  const statusText = account.status_line || lastSeen(s.last_login, owner);
+  const showWatch = owner || account.show_watching !== false;
+  const actions = `
+    <div class="profile-cover-actions">
+      ${actionBtn('copyBtn', 'Havolani nusxalash', '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>')}
+      ${actionBtn('infoBtn', 'Foydalanuvchi haqida', '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 8h.01"/></svg>')}
+      ${owner ? actionBtn('editBtn', 'Profilni tahrirlash', '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>') : actionBtn('reportBtn', 'Shikoyat', '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M5 4v16M5 5h11l-1.5 4L16 13H5"/></svg>')}
+    </div>`;
+  root.innerHTML = `
+    <div class="profile-page">
+      <div class="profile-cover">
+        ${banner ? `<img class="profile-cover-img" src="${banner}" alt="" onerror="this.remove()"/>` : ''}
+        <div class="profile-cover-fade"></div>
+        <div class="profile-cover-inner">
+          <div class="profile-id profile-id-on-cover">
+            ${avatarHtml(account)}
+            <div class="profile-id-copy">
+              <h1>${Utils.escapeHtml(name)}${streakChip(account, owner)}</h1>
+              <p class="profile-handle">@${Utils.escapeHtml(account.username || '')}</p>
+              <p class="profile-presence ${online ? '' : 'is-away'}"><i></i>${Utils.escapeHtml(statusText)}</p>
+            </div>
+          </div>
+          ${actions}
+        </div>
+      </div>
+      <div class="profile-body">
+        <div class="profile-cards">
+          <div class="profile-mini">
+            <div class="profile-mini-ico">${ico('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 20h8"/></svg>')}</div>
+            <div><b>${s.episodes_watched ?? 0}</b><span>Ko‘rilgan qismlar</span></div>
+          </div>
+          <div class="profile-mini">
+            <div class="profile-mini-ico">${ico('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a4 4 0 01-4 4H8l-5 3V7a4 4 0 014-4h10a4 4 0 014 4z"/></svg>')}</div>
+            <div><b>${s.comments ?? 0}</b><span>Izohlar</span></div>
+          </div>
+          <div class="profile-mini">
+            <div class="profile-mini-ico">${ico('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21l-1.5-1.4C5.4 15.1 2 12.1 2 8.5A4.5 4.5 0 0112 5.1 4.5 4.5 0 0122 8.5c0 3.6-3.4 6.6-8.5 11.1z"/></svg>')}</div>
+            <div><b>${counts.favorite || 0}</b><span>Sevimli</span></div>
+          </div>
+        </div>
+        ${trackHtml(s.episodes_watched)}
+        ${privateProfile ? '<p class="profile-empty">Bu profil yopiq.</p>' : `
+        <div class="profile-cols">
+          ${showWatch ? `
+          <div class="profile-panel">
+            <h2>Ko‘ryapman <em>${watchingTotal}${owner ? ` · <a href="${urls.lists || '/lists/'}?status=watching">Ro‘yxatlarga</a>` : ''}</em></h2>
+            <div class="profile-watch-grid">${watching.map((row) => posterTile(row.anime || row)).join('')}</div>
+          </div>` : '<div></div>'}
+          <div class="profile-panel">
+            <h2>Sevimli <em>${Math.min(favorite.length, 5)} / 5${owner ? ` · <a href="${urls.lists || '/lists/'}?status=favorite">Ro‘yxatlarga</a>` : ''}</em></h2>
+            <div class="profile-favs">${favSlots(favorite, owner)}</div>
+          </div>
+        </div>`}
+      </div>
+      ${infoSheet(account, { owner })}
+      ${streakSheet(account, owner)}
+      ${owner ? editSheet(account) : reportSheet()}
+      ${owner ? pickerSheet() : ''}
+      ${owner ? cropSheet() : ''}
+    </div>
+  `;
+  bindSheets(account, ctx, { favoriteCount: favorite.length });
+}
+
+const crop = {
+  kind: 'avatar',
+  zoom: 1,
+  ox: 0,
+  oy: 0,
+  nw: 0,
+  nh: 0,
+  url: '',
+};
+
+function cropViewSize() {
+  const view = document.getElementById('cropView');
+  return { vw: view.clientWidth, vh: view.clientHeight };
+}
+
+function cropScale() {
+  const { vw, vh } = cropViewSize();
+  return Math.max(vw / Math.max(crop.nw, 1), vh / Math.max(crop.nh, 1)) * crop.zoom;
+}
+
+function clampCrop() {
+  const { vw, vh } = cropViewSize();
+  const s = cropScale();
+  const maxX = Math.max(0, (crop.nw * s - vw) / 2);
+  const maxY = Math.max(0, (crop.nh * s - vh) / 2);
+  crop.ox = Math.min(maxX, Math.max(-maxX, crop.ox));
+  crop.oy = Math.min(maxY, Math.max(-maxY, crop.oy));
+}
+
+function paintCrop() {
+  const el = document.getElementById('cropImg');
+  const view = document.getElementById('cropView');
+  if (!el || !view || !crop.nw) return;
+  clampCrop();
+  const { vw, vh } = cropViewSize();
+  const s = cropScale();
+  el.style.width = `${crop.nw * s}px`;
+  el.style.height = `${crop.nh * s}px`;
+  el.style.left = `${vw / 2 - (crop.nw * s) / 2 + crop.ox}px`;
+  el.style.top = `${vh / 2 - (crop.nh * s) / 2 + crop.oy}px`;
+}
+
+function cancelCrop() {
+  const sheet = document.getElementById('cropSheet');
+  if (sheet) sheet.hidden = true;
+  if (crop.url) {
+    URL.revokeObjectURL(crop.url);
+    crop.url = '';
+  }
+  const edit = document.getElementById('editSheet');
+  if (edit) edit.hidden = false;
+}
+
+function openCrop(file, kind) {
+  if (crop.url) URL.revokeObjectURL(crop.url);
+  crop.kind = kind;
+  crop.zoom = 1;
+  crop.ox = 0;
+  crop.oy = 0;
+  crop.srcImg = null;
+  crop.url = URL.createObjectURL(file);
+  const view = document.getElementById('cropView');
+  const title = document.getElementById('cropTitle');
+  const zoom = document.getElementById('cropZoom');
+  const sheet = document.getElementById('cropSheet');
+  const img = document.getElementById('cropImg');
+  if (!view || !sheet || !img) return;
+  view.classList.toggle('is-avatar', kind === 'avatar');
+  view.classList.toggle('is-banner', kind === 'banner');
+  if (title) title.textContent = kind === 'banner' ? 'Banner' : 'Avatar';
+  if (zoom) zoom.value = '1';
+  sheet.hidden = false;
+  const src = new Image();
+  src.onload = () => {
+    crop.srcImg = src;
+    crop.nw = src.naturalWidth;
+    crop.nh = src.naturalHeight;
+    img.src = crop.url;
+    requestAnimationFrame(paintCrop);
+  };
+  src.onerror = () => {
+    cancelCrop();
+    Utils.toast('Bu rasm ochilmadi', 'error');
+  };
+  src.src = crop.url;
+}
+
+function exportCrop() {
+  const img = crop.srcImg || document.getElementById('cropImg');
+  if (!img || !crop.nw) return Promise.reject(new Error('Rasm ochilmadi'));
+  const { vw, vh } = cropViewSize();
+  if (vw < 8 || vh < 8) return Promise.reject(new Error('Qirqish oynasi ochilmadi'));
+  const s = cropScale();
+  const left = vw / 2 - (crop.nw * s) / 2 + crop.ox;
+  const top = vh / 2 - (crop.nh * s) / 2 + crop.oy;
+  let sx = (0 - left) / s;
+  let sy = (0 - top) / s;
+  let sw = vw / s;
+  let sh = vh / s;
+  sx = Math.max(0, Math.min(crop.nw - 1, sx));
+  sy = Math.max(0, Math.min(crop.nh - 1, sy));
+  sw = Math.max(1, Math.min(crop.nw - sx, sw));
+  sh = Math.max(1, Math.min(crop.nh - sy, sh));
+  const outW = crop.kind === 'banner' ? 1600 : 512;
+  const outH = crop.kind === 'banner' ? 480 : 512;
+  const canvas = document.createElement('canvas');
+  canvas.width = outW;
+  canvas.height = outH;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, outW, outH);
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        reject(new Error('Qirqilmadi'));
+        return;
+      }
+      resolve(new File([blob], crop.kind === 'banner' ? 'banner.jpg' : 'avatar.jpg', { type: 'image/jpeg' }));
+    }, 'image/jpeg', 0.9);
+  });
+}
+
+function bindSheets(account, ctx, extra) {
+  document.getElementById('infoBtn')?.addEventListener('click', () => openSheet('infoSheet'));
+  document.getElementById('streakBtn')?.addEventListener('click', () => openSheet('streakSheet'));
+  document.getElementById('editBtn')?.addEventListener('click', () => openSheet('editSheet'));
+  document.getElementById('reportBtn')?.addEventListener('click', () => {
+    if (!Auth.user()) {
+      location.href = `${urls.auth || '/auth/'}?next=${encodeURIComponent(location.pathname)}`;
+      return;
+    }
+    if (Auth.user()?.can_report === false) {
+      Utils.toast('Shikoyat yuborish vaqtincha yopiq', 'error');
+      return;
+    }
+    openSheet('reportSheet');
+  });
+  document.getElementById('copyBtn')?.addEventListener('click', async () => {
+    const url = `${location.origin}/u/${encodeURIComponent(account.username || '')}/`;
+    try {
+      await navigator.clipboard.writeText(url);
+      Utils.toast('Havola nusxalandi', 'success');
+    } catch {
+      Utils.toast(url, 'info');
+    }
+  });
+  root.querySelectorAll('[data-close-sheet], .profile-sheet').forEach((el) => {
+    if (el.id === 'cropSheet') return;
+    el.addEventListener('click', (e) => {
+      if (e.target === el || e.currentTarget.hasAttribute('data-close-sheet')) closeSheets();
+    });
+  });
+  root.querySelectorAll('#togWatch, #togPublic').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      btn.setAttribute('aria-pressed', btn.getAttribute('aria-pressed') === 'true' ? 'false' : 'true');
+    });
+  });
+  root.querySelectorAll('[data-pick-fav]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if ((extra.favoriteCount || 0) >= 5) {
+        Utils.toast('Sevimli 5 ta gacha', 'info');
+        return;
+      }
+      openSheet('pickSheet');
+      document.getElementById('pickSearch')?.focus();
+    });
+  });
+  const pickSearch = document.getElementById('pickSearch');
+  const pickResults = document.getElementById('pickResults');
+  const runPick = Utils.debounce(async () => {
+    const q = (pickSearch.value || '').trim();
+    if (q.length < 2) {
+      pickResults.innerHTML = '';
+      return;
+    }
+    try {
+      const data = await API.get(API.endpoints.search(q));
+      const rows = data.results || data || [];
+      if (!rows.length) {
+        pickResults.innerHTML = '';
+        return;
+      }
+      pickResults.innerHTML = rows.slice(0, 8).map((a) => `
+        <button type="button" class="profile-pick-hit" data-id="${a.id}">
+          <img src="${a.poster||''}" alt="" onerror="Utils.imgFallback(this)"/>
+          <span>${Utils.escapeHtml(a.title || '—')}</span>
+          <small>${Utils.kindLabel(a.kind)}</small>
+        </button>`).join('');
+      pickResults.querySelectorAll('[data-id]').forEach((hit) => {
+        hit.addEventListener('click', async () => {
+          try {
+            await Lists.set({ id: Number(hit.dataset.id) }, 'favorite');
+            closeSheets();
+            const data = await Auth.syncFromMe() || Auth.user() || account;
+            await render(data, ctx);
+          } catch (ex) {
+            Utils.toast(ex.payload?.message || ex.message || 'Qo‘shilmadi', 'error');
+          }
+        });
+      });
+    } catch {
+      pickResults.innerHTML = '';
+    }
+  }, 220);
+  pickSearch?.addEventListener('input', runPick);
+  document.getElementById('pickAvatar')?.addEventListener('click', () => document.getElementById('editAvatar')?.click());
+  document.getElementById('pickBanner')?.addEventListener('click', () => document.getElementById('editBanner')?.click());
+  document.getElementById('editAvatar')?.addEventListener('change', (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (file) openCrop(file, 'avatar');
+  });
+  document.getElementById('editBanner')?.addEventListener('change', (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (file) openCrop(file, 'banner');
+  });
+  document.getElementById('cropSheet')?.addEventListener('click', (e) => {
+    if (e.target.id === 'cropSheet') cancelCrop();
+  });
+  document.getElementById('cropCancel')?.addEventListener('click', cancelCrop);
+  document.getElementById('cropCancelX')?.addEventListener('click', cancelCrop);
+  document.getElementById('cropZoom')?.addEventListener('input', (e) => {
+    crop.zoom = Number(e.target.value) || 1;
+    paintCrop();
+  });
+  const view = document.getElementById('cropView');
+  if (view && !view.dataset.bound) {
+    view.dataset.bound = '1';
+    let drag = null;
+    view.addEventListener('pointerdown', (e) => {
+      drag = { x: e.clientX, y: e.clientY, ox: crop.ox, oy: crop.oy };
+      view.classList.add('is-dragging');
+      view.setPointerCapture(e.pointerId);
+    });
+    view.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      crop.ox = drag.ox + (e.clientX - drag.x);
+      crop.oy = drag.oy + (e.clientY - drag.y);
+      paintCrop();
+    });
+    const stopDrag = () => {
+      drag = null;
+      view.classList.remove('is-dragging');
+    };
+    view.addEventListener('pointerup', stopDrag);
+    view.addEventListener('pointercancel', stopDrag);
+    view.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const zoomEl = document.getElementById('cropZoom');
+      const z = Number(zoomEl?.value) || 1;
+      const next = Math.min(3, Math.max(1, z + (e.deltaY < 0 ? 0.08 : -0.08)));
+      if (zoomEl) zoomEl.value = String(next);
+      crop.zoom = next;
+      paintCrop();
+    }, { passive: false });
+  }
+  document.getElementById('cropSave')?.addEventListener('click', async () => {
+    const btn = document.getElementById('cropSave');
+    if (btn) btn.disabled = true;
+    try {
+      const file = await exportCrop();
+      const fd = new FormData();
+      if (crop.kind === 'banner') {
+        fd.append('banner', file, file.name);
+        const data = await API.upload(API.endpoints.meBanner(), fd);
+        Auth.setSession(null, { ...(Auth.user() || {}), ...data });
+        cancelCrop();
+        await render(data, ctx);
+        openSheet('editSheet');
+      } else {
+        fd.append('photo', file, file.name);
+        const data = await API.upload(API.endpoints.mePhoto(), fd);
+        Auth.setSession(null, { ...(Auth.user() || {}), ...data });
+        Auth.bootNav();
+        cancelCrop();
+        await render(data, ctx);
+        openSheet('editSheet');
+      }
+    } catch (ex) {
+      Utils.toast(ex.payload?.message || ex.message || 'Rasm yuklanmadi', 'error');
+      if (btn) btn.disabled = false;
+    }
+  });
+  document.getElementById('clearBanner')?.addEventListener('click', async () => {
+    try {
+      const data = await API.delete(API.endpoints.meBanner());
+      Auth.setSession(null, { ...(Auth.user() || {}), ...data });
+      Utils.toast('Banner olindi', 'info');
+      await render(data, ctx);
+      openSheet('editSheet');
+    } catch (ex) {
+      Utils.toast(ex.payload?.message || ex.message || 'Xato', 'error');
+    }
+  });
+  document.getElementById('editForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const err = document.getElementById('editErr');
+    const watchOn = document.getElementById('togWatch')?.getAttribute('aria-pressed') !== 'false';
+    const publicOn = document.getElementById('togPublic')?.getAttribute('aria-pressed') !== 'false';
+    try {
+      const data = await API.patch(API.endpoints.me(), {
+        first_name: fd.get('first_name') || '',
+        username: fd.get('username'),
+        bio: fd.get('bio') || '',
+        status_line: fd.get('status_line') || '',
+        show_watching: watchOn,
+        public_profile: publicOn,
+      });
+      Auth.setSession(null, { ...(Auth.user() || {}), ...data });
+      Auth.bootNav();
+      Utils.toast('Saqlandi', 'success');
+      closeSheets();
+      await render(data, ctx);
+    } catch (ex) {
+      if (err) err.textContent = ex.payload?.message || ex.message || 'Saqlanmadi';
+    }
+  });
+  root.querySelectorAll('#reportKinds [data-kind]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      root.querySelectorAll('#reportKinds [data-kind]').forEach((el) => el.setAttribute('aria-pressed', 'false'));
+      btn.setAttribute('aria-pressed', 'true');
+    });
+  });
+  root.querySelectorAll('#reportReasons [data-reason]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      root.querySelectorAll('#reportReasons [data-reason]').forEach((el) => el.setAttribute('aria-pressed', 'false'));
+      btn.setAttribute('aria-pressed', 'true');
+    });
+  });
+  document.getElementById('reportForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const err = document.getElementById('reportErr');
+    if (err) err.textContent = '';
+    const kind = root.querySelector('#reportKinds [aria-pressed="true"]')?.dataset.kind;
+    const reason = root.querySelector('#reportReasons [aria-pressed="true"]')?.dataset.reason;
+    const note = new FormData(e.target).get('note') || '';
+    const btn = e.target.querySelector('button[type="submit"]');
+    if (!kind || !reason) {
+      if (err) err.textContent = 'Nima va sababni tanlang';
+      return;
+    }
+    if (btn) btn.disabled = true;
+    try {
+      await API.post(API.endpoints.reportProfile(account.username), { kind, reason, note });
+      Utils.toast('Shikoyat yuborildi', 'success');
+      closeSheets();
+    } catch (ex) {
+      if (err) err.textContent = ex.payload?.message || ex.message || 'Yuborilmadi';
+    }
+    if (btn) btn.disabled = false;
+  });
+}
+
+(async function init() {
+  if (viewName) {
+    try {
+      const data = await API.get(API.endpoints.publicProfile(viewName));
+      const me = Auth.user();
+      await render(data, {
+        owner: me && me.username && me.username.toLowerCase() === data.username.toLowerCase(),
+        privateProfile: Boolean(data.private),
+        counts: data.counts || {},
+      });
+    } catch {
+      root.innerHTML = '<div class="page-container empty-state"><h3>Profil topilmadi</h3></div>';
+    }
+    return;
+  }
+  const session = Auth.user();
+  if (!session) { gate(); return; }
+  const account = await Auth.syncFromMe() || session;
+  let counts = { watching: 0, completed: 0, planned: 0, dropped: 0, favorite: 0 };
+  try {
+    const lists = await Lists.mine();
+    counts = lists.counts || counts;
+  } catch {}
+  await render(account, { owner: true, privateProfile: false, counts });
+})();
+</script>
+</body>
+</html>

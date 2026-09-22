@@ -1,0 +1,237 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Taklif — Animee</title>
+  <link rel="stylesheet" href="{% static 'css/global.css' %}?v=animee120"/>
+  <style>
+    .invite-body { min-height: 100vh; }
+    .invite-shell {
+      min-height: calc(100vh - var(--navbar-h) - var(--tab-h));
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center;
+      padding: calc(var(--navbar-h) + 1.2rem) 1rem 6.5rem;
+      position: relative;
+    }
+    .invite-bg {
+      position: absolute; inset: 0;
+      background-size: cover; background-position: center;
+      filter: blur(28px) saturate(1.2); opacity: .35; transform: scale(1.12);
+      pointer-events: none;
+    }
+    .invite-card {
+      position: relative; z-index: 1;
+      width: min(28rem, 100%);
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 1.4rem;
+      padding: 1.25rem 1.25rem 1.1rem;
+      box-shadow: 0 24px 80px rgba(0,0,0,.45);
+      backdrop-filter: blur(18px);
+    }
+    .invite-kicker {
+      font-size: .72rem; letter-spacing: .16em; text-transform: uppercase;
+      color: var(--accent-2); font-weight: 700;
+    }
+    .invite-title {
+      font-family: var(--font-display);
+      font-size: 1.55rem; margin: .2rem 0 .15rem; line-height: 1.2;
+    }
+    .invite-sub { color: var(--text-secondary); font-size: .9rem; margin-bottom: .9rem; }
+    .invite-host {
+      display: flex; align-items: center; gap: .55rem;
+      margin-bottom: 1rem; color: var(--text-secondary); font-size: .85rem;
+    }
+    .invite-host img, .invite-ava {
+      width: 2rem; height: 2rem; border-radius: 50%; object-fit: cover;
+      background: var(--accent-dim); display: grid; place-items: center; font-weight: 800;
+    }
+    .invite-preview {
+      position: relative; aspect-ratio: 16/10;
+      border-radius: 1rem; overflow: hidden;
+      background: #090014; border: 1px solid var(--border);
+    }
+    .invite-preview video {
+      width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1);
+    }
+    .invite-preview-empty {
+      position: absolute; inset: 0; display: grid; place-items: center;
+      color: var(--text-muted); font-size: .85rem; text-align: center; padding: 1rem;
+    }
+    .invite-toggles {
+      display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; margin: .9rem 0 .55rem;
+    }
+    .invite-tog {
+      border: 1px solid var(--border); background: rgba(255,255,255,.04);
+      color: var(--text-primary); border-radius: .9rem; padding: .7rem .6rem;
+      font: inherit; font-weight: 700; cursor: pointer;
+    }
+    .invite-tog.is-on { border-color: var(--accent); background: var(--accent-dim); color: #fff; }
+    .invite-tog small { display: block; font-weight: 500; color: var(--text-muted); font-size: .72rem; }
+    .invite-hint { min-height: 1.3rem; font-size: .8rem; color: var(--gold); }
+    .invite-hint.is-err { color: #ff8aa8; }
+    .invite-body .bottom-nav { display: none !important; }
+    .invite-bar {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 130;
+      padding: .85rem 1rem calc(.9rem + env(safe-area-inset-bottom));
+      background: linear-gradient(transparent, rgba(7,0,22,.92) 28%);
+    }
+    .invite-bar button {
+      width: min(28rem, 100%); display: block; margin: 0 auto;
+      border: 0; border-radius: 999px; padding: .95rem 1.2rem;
+      font: inherit; font-weight: 800; font-size: 1rem; cursor: pointer;
+      background: linear-gradient(90deg, var(--accent), #ff6ad6);
+      color: #fff; box-shadow: 0 10px 30px var(--accent-glow);
+    }
+    .invite-bar button:disabled {
+      opacity: .45; cursor: not-allowed; box-shadow: none; filter: grayscale(.3);
+    }
+    @media (min-width: 900px) {
+      .invite-shell { padding-bottom: 2.5rem; }
+      .invite-bar { position: static; padding: .4rem 0 0; background: none; }
+    }
+  </style>
+</head>
+<body class="invite-body">
+{% include "partials/nav.html" with active="party" %}
+<div class="invite-shell">
+  <div class="invite-bg" id="inviteBg"></div>
+  <div class="invite-card">
+    <p class="invite-kicker">Birgalikda · taklif</p>
+    <h1 class="invite-title" id="inviteTitle">Xona ochilmoqda…</h1>
+    <p class="invite-sub" id="inviteSub">Qism yuklanmoqda</p>
+    <div class="invite-host" id="inviteHost"></div>
+    <div class="invite-preview">
+      <video id="inviteVideo" playsinline autoplay muted></video>
+      <div class="invite-preview-empty" id="inviteEmpty">Kamera ruxsati kutilmoqda</div>
+    </div>
+    <div class="invite-toggles">
+      <button type="button" class="invite-tog" id="camBtn">Kamera<small id="camNeed">ixtiyoriy</small></button>
+      <button type="button" class="invite-tog" id="micBtn">Mikrofon<small id="micNeed">ixtiyoriy</small></button>
+    </div>
+    <p class="invite-hint" id="inviteHint"></p>
+  </div>
+</div>
+<div class="invite-bar">
+  <button type="button" id="joinBtn" disabled>Qo‘shilish</button>
+</div>
+<script src="{% static 'js/api.js' %}?v=animee90"></script>
+<script>
+const code = "{{ party_code|escapejs }}";
+const PartyMedia = {
+  key: 'animee_party_media',
+  save(cam, mic) {
+    sessionStorage.setItem(this.key, JSON.stringify({ code, cam: !!cam, mic: !!mic, at: Date.now() }));
+  },
+};
+const state = { party: null, cam: false, mic: false, stream: null };
+
+function roomUrl() {
+  const ep = state.party?.episode?.id;
+  return Utils.watchHref(state.party?.episode || { id: ep }, code);
+}
+
+function paint() {
+  const p = state.party;
+  if (!p) return;
+  document.getElementById('inviteTitle').textContent = p.episode?.anime_title || 'Birgalikda';
+  document.getElementById('inviteSub').textContent = p.episode?.title || `${p.episode?.number || ''}-qism`;
+  const poster = p.episode?.poster || '';
+  if (poster) document.getElementById('inviteBg').style.backgroundImage = `url('${poster}')`;
+  const host = p.host || {};
+  const photo = Utils.safeUrl(host.photo);
+  const name = Utils.escapeHtml(host.username || 'Host');
+  document.getElementById('inviteHost').innerHTML = `${photo ? `<img src="${photo}" alt="">` : `<span class="invite-ava">${name.slice(0,1)}</span>`}<span><strong>${name}</strong> sizni chaqirdi</span>`;
+  document.getElementById('camNeed').textContent = p.require_camera ? 'majburiy' : 'ixtiyoriy';
+  document.getElementById('micNeed').textContent = p.require_mic ? 'majburiy' : 'ixtiyoriy';
+  document.getElementById('camBtn').classList.toggle('is-on', state.cam);
+  document.getElementById('micBtn').classList.toggle('is-on', state.mic);
+  const empty = document.getElementById('inviteEmpty');
+  empty.hidden = Boolean(state.cam);
+  empty.textContent = p.require_camera ? 'Kamera ruxsati kerak' : 'Kamerani yoqishingiz mumkin';
+  const okCam = !p.require_camera || state.cam;
+  const okMic = !p.require_mic || state.mic;
+  const join = document.getElementById('joinBtn');
+  join.disabled = !(okCam && okMic) || p.closed;
+  const hint = document.getElementById('inviteHint');
+  hint.classList.toggle('is-err', !(okCam && okMic));
+  if (p.closed) hint.textContent = 'Xona yopilgan';
+  else if (!okCam || !okMic) hint.textContent = 'Majburiy ruxsatlarni bering — keyin Qo‘shilish ochiladi';
+  else hint.textContent = Auth.user() ? 'Tayyor. Qo‘shilishni bosing.' : 'Qo‘shilishdan so‘ng avval hisobga kirasiz, keyin xona ochiladi.';
+}
+
+async function syncMedia() {
+  if (!state.cam && !state.mic) {
+    if (state.stream) {
+      state.stream.getTracks().forEach((t) => t.stop());
+      state.stream = null;
+    }
+    document.getElementById('inviteVideo').srcObject = null;
+    PartyMedia.save(false, false);
+    paint();
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: state.cam, audio: state.mic });
+    if (state.stream) state.stream.getTracks().forEach((t) => t.stop());
+    state.stream = stream;
+    const video = document.getElementById('inviteVideo');
+    video.srcObject = stream;
+    video.play().catch(() => {});
+    PartyMedia.save(state.cam, state.mic);
+    paint();
+  } catch {
+    state.cam = false;
+    state.mic = false;
+    PartyMedia.save(false, false);
+    document.getElementById('inviteHint').textContent = 'Brauzer kamera yoki mikrofonni rad etdi';
+    document.getElementById('inviteHint').classList.add('is-err');
+    paint();
+  }
+}
+
+async function loadPreview() {
+  try {
+    const data = await API.get(API.endpoints.partyPreview(code));
+    state.party = data;
+    paint();
+    if ((data.require_camera || data.require_mic) && !state.cam && !state.mic) {
+      state.cam = Boolean(data.require_camera);
+      state.mic = Boolean(data.require_mic);
+      await syncMedia();
+    }
+  } catch (err) {
+    document.getElementById('inviteTitle').textContent = 'Xona topilmadi';
+    document.getElementById('inviteSub').textContent = err.payload?.message || err.message || '';
+    document.getElementById('joinBtn').disabled = true;
+  }
+}
+
+document.getElementById('camBtn').addEventListener('click', () => {
+  state.cam = !state.cam;
+  syncMedia();
+});
+document.getElementById('micBtn').addEventListener('click', () => {
+  state.mic = !state.mic;
+  syncMedia();
+});
+document.getElementById('joinBtn').addEventListener('click', () => {
+  if (!state.party || document.getElementById('joinBtn').disabled) return;
+  PartyMedia.save(state.cam, state.mic);
+  const next = roomUrl();
+  if (state.stream) state.stream.getTracks().forEach((t) => t.stop());
+  if (!Auth.user()) {
+    Auth.rememberNext(next);
+    location.href = ANIMEE_URLS.auth + '?next=' + encodeURIComponent(next);
+    return;
+  }
+  location.href = next;
+});
+
+loadPreview();
+setInterval(loadPreview, 4000);
+</script>
+</body>
+</html>

@@ -1,0 +1,566 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Katalog — Animee</title>
+  <link rel="stylesheet" href="{% static 'css/global.css' %}?v=animee120"/>
+  <style>
+    .catalog-header {
+      padding: 2.5rem 0 1.5rem;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 2rem;
+    }
+    .catalog-header h1 {
+      font-family: var(--font-display);
+      font-size: 2.2rem;
+      letter-spacing: 2px;
+      margin-bottom: 0.35rem;
+    }
+
+    /* ---- SEARCH BAR ---- */
+    .search-bar-wrap {
+      position: relative;
+      max-width: 600px;
+    }
+    .search-icon {
+      position: absolute;
+      left: 1rem; top: 50%;
+      transform: translateY(-50%);
+      font-size: 1.1rem;
+      pointer-events: none;
+      color: var(--text-secondary);
+    }
+    .search-bar {
+      width: 100%;
+      padding: 0.85rem 1rem 0.85rem 3rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text-primary);
+      font-size: 0.95rem;
+      font-family: var(--font-body);
+      outline: none;
+      transition: border-color var(--transition), box-shadow var(--transition);
+    }
+    .search-bar:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+    .search-bar::placeholder { color: var(--text-muted); }
+    .search-clear {
+      position: absolute;
+      right: 1rem; top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      color: var(--text-muted);
+      font-size: 1.1rem;
+      display: none;
+      cursor: pointer;
+    }
+    .search-clear.visible { display: block; }
+
+    /* ---- FILTERS SIDEBAR + RESULTS ---- */
+    .catalog-layout {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      gap: 2rem;
+      align-items: start;
+    }
+    @media (max-width: 900px) { .catalog-layout { grid-template-columns: 1fr; } }
+
+    /* Sidebar */
+    .sidebar {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.25rem;
+      position: sticky;
+      top: calc(var(--navbar-h) + 1rem);
+    }
+    .sidebar-section { margin-bottom: 1.5rem; }
+    .sidebar-section:last-child { margin-bottom: 0; }
+    .sidebar-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--text-muted);
+      margin-bottom: 0.75rem;
+    }
+    .year-details > summary {
+      cursor: pointer;
+      list-style: none;
+    }
+    .year-details > summary::-webkit-details-marker { display: none; }
+    @media (max-width: 900px) {
+      .sidebar { position: static; }
+    }
+    .filter-options { display: flex; flex-direction: column; gap: 0.3rem; }
+    .filter-opt {
+      padding: 0.4rem 0.65rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all var(--transition);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .filter-opt:hover { background: var(--bg-elevated); color: var(--text-primary); }
+    .filter-opt.active { background: var(--accent-dim); color: var(--accent); }
+    .filter-count {
+      font-size: 0.7rem;
+      background: var(--bg-elevated);
+      padding: 1px 6px;
+      border-radius: 10px;
+      color: var(--text-muted);
+    }
+
+    /* Genre tags in sidebar */
+    .genre-cloud { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+
+    /* Reset btn */
+    .filter-reset {
+      width: 100%;
+      padding: 0.6rem;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      color: var(--text-secondary);
+      font-size: 0.83rem;
+      cursor: pointer;
+      transition: all var(--transition);
+      margin-top: 1rem;
+    }
+    .filter-reset:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* Results area */
+    .results-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.25rem;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    .results-count {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+    }
+    .results-count strong { color: var(--text-primary); }
+    .sort-select {
+      padding: 0.45rem 0.9rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      color: var(--text-primary);
+      font-size: 0.83rem;
+      cursor: pointer;
+      outline: none;
+      font-family: var(--font-body);
+    }
+    .sort-select option { background: var(--bg-card); }
+
+    /* Pagination */
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      padding: 2.5rem 0;
+      flex-wrap: wrap;
+    }
+    .page-btn {
+      min-width: 38px; height: 38px;
+      padding: 0 0.5rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      color: var(--text-secondary);
+      font-size: 0.88rem;
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+    .page-btn:hover { border-color: var(--border-hover); color: var(--text-primary); }
+    .page-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .page-btn:disabled { opacity: 0.3; pointer-events: none; }
+
+    /* Search suggestions dropdown */
+    .search-suggestions {
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 0; right: 0;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      z-index: 50;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      display: none;
+    }
+    .search-suggestions.show { display: block; }
+    .suggestion-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.6rem 1rem;
+      cursor: pointer;
+      transition: background var(--transition);
+      font-size: 0.88rem;
+    }
+    .suggestion-item:hover { background: var(--bg-card); }
+    .suggestion-thumb {
+      width: 32px; height: 42px;
+      border-radius: 4px;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .suggestion-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .suggestion-title { font-weight: 500; }
+    .suggestion-sub { font-size: 0.72rem; color: var(--text-secondary); }
+    .catalog-mood { justify-content: flex-start; margin-top: 0.85rem; }
+  </style>
+</head>
+<body>
+
+{% include "partials/nav.html" with active="catalog" %}
+
+<div id="app">
+  <div class="page-container">
+
+    <!-- Header + Search -->
+    <div class="catalog-header">
+      <h1>Katalog</h1>
+      <p class="search-kicker">検索 · darvoza</p>
+      <div class="search-radar">
+        <div class="search-radar-ring"></div>
+        <div class="search-bar-wrap">
+          <span class="search-icon">◎</span>
+          <input type="text" class="search-bar" id="searchInput" placeholder="Ism, kayfiyat, janr… yoki / bosing"/>
+          <button class="search-clear" id="searchClear" onclick="clearSearch()">✕</button>
+          <div class="search-suggestions" id="suggestions"></div>
+        </div>
+      </div>
+      <div class="kind-pills" id="kindPills">
+        <button type="button" class="active" data-kind="">Barchasi</button>
+        <button type="button" data-kind="anime">Anime</button>
+        <button type="button" data-kind="drama">Drama</button>
+        <button type="button" data-kind="film">Kino</button>
+        <button type="button" data-kind="serial">Serial</button>
+      </div>
+    </div>
+
+    <!-- Layout -->
+    <div class="catalog-layout">
+
+      <!-- SIDEBAR -->
+      <aside class="sidebar">
+        <div class="sidebar-section">
+          <div class="sidebar-label">Janr</div>
+          <div class="genre-cloud" id="genreCloud">
+            <div class="skeleton-anim" style="height:28px;width:100%;border-radius:20px;"></div>
+          </div>
+        </div>
+
+        <details class="sidebar-section year-details">
+          <summary class="sidebar-label">Yil</summary>
+          <div class="filter-options" id="yearFilters">
+            <div class="filter-opt active" onclick="setFilter('year',null,this)">Barchasi</div>
+            <div class="filter-opt" onclick="setFilter('year','2025',this)">2025</div>
+            <div class="filter-opt" onclick="setFilter('year','2024',this)">2024</div>
+            <div class="filter-opt" onclick="setFilter('year','2023',this)">2023</div>
+            <div class="filter-opt" onclick="setFilter('year','2022',this)">2022</div>
+            <div class="filter-opt" onclick="setFilter('year','2020',this)">2020 va oldin</div>
+          </div>
+        </details>
+
+        <button class="filter-reset" onclick="resetFilters()">🔄 Filtrlarni tozalash</button>
+      </aside>
+
+      <!-- RESULTS -->
+      <div>
+        <div class="results-bar">
+          <span class="results-count" id="resultsCount">Yuklanmoqda...</span>
+          <select class="sort-select" id="sortSelect" onchange="applySort()">
+            <option value="-id">Yangi birinchi</option>
+            <option value="title">A–Z</option>
+            <option value="-title">Z–A</option>
+          </select>
+        </div>
+
+        <div class="anime-grid" id="animeGrid">
+          <!-- filled by JS -->
+        </div>
+
+        <div class="pagination" id="pagination"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="{% static 'js/api.js' %}?v=animee90"></script>
+<script>
+const URLS = {
+  index: "{% url 'index' %}",
+  detail: "{% url 'detail' %}",
+  catalog: "{% url 'catalog' %}",
+  player: "{% url 'player' %}",
+};
+</script>
+<script>
+// ---- State ----
+const state = {
+  page: 1,
+  pageSize: 20,
+  total: 0,
+  search: '',
+  genre: null,
+  status: null,
+  kind: null,
+  year: null,
+  ordering: '-id',
+};
+
+window.addEventListener('scroll', () => {
+  document.getElementById('navbar').classList.toggle('scrolled', window.scrollY > 60);
+});
+
+// ---- URL params on load ----
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get('q')) { state.search = urlParams.get('q'); document.getElementById('searchInput').value = state.search; }
+if (urlParams.get('kind')) state.kind = urlParams.get('kind');
+const allowedSort = new Set(['-id', 'id', 'title', '-title']);
+if (allowedSort.has(urlParams.get('sort'))) {
+  state.ordering = urlParams.get('sort');
+  const sel = document.getElementById('sortSelect');
+  if (sel) sel.value = state.ordering;
+}
+
+// ---- Filters ----
+const activeFilters = {};
+function setFilter(key, value, el) {
+  activeFilters[key] = value;
+  // update UI
+  const siblings = el.closest('.filter-options, .genre-cloud').querySelectorAll('.filter-opt, .genre-tag');
+  siblings.forEach(s => s.classList.remove('active'));
+  el.classList.add('active');
+  state.page = 1;
+  loadAnimes();
+}
+
+function resetFilters() {
+  Object.keys(activeFilters).forEach(k => delete activeFilters[k]);
+  state.genre = null; state.status = null; state.year = null; state.search = ''; state.kind = null;
+  state.page = 1;
+  document.getElementById('searchInput').value = '';
+  document.getElementById('searchClear').classList.remove('visible');
+  document.querySelectorAll('.filter-opt, .genre-tag').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.filter-opt:first-child').forEach(el => el.classList.add('active'));
+  document.querySelectorAll('#kindPills button').forEach(el => el.classList.toggle('active', el.dataset.kind === ''));
+  loadAnimes();
+}
+
+function applySort() {
+  state.ordering = document.getElementById('sortSelect').value;
+  state.page = 1;
+  loadAnimes();
+}
+
+// ---- Genres ----
+async function loadGenres() {
+  try {
+    const data = await API.get(API.endpoints.genres());
+    const list = data.results || data || [];
+    document.getElementById('genreCloud').innerHTML =
+      `<span class="genre-tag active" onclick="setFilter('genre',null,this)">Barchasi</span>` +
+      list.map(g => `
+        <span class="genre-tag" data-genre="${g.id}" onclick="setFilter('genre','${g.id}',this)">${g.name}</span>
+      `).join('');
+  } catch(e) { document.getElementById('genreCloud').innerHTML = '<span style="color:var(--text-muted);font-size:.8rem">Yuklab bo\'lmadi</span>'; }
+}
+
+// ---- Card HTML ----
+function cardHTML(anime) {
+  return `
+    <div class="anime-card" onclick="window.location.href='${Utils.titleHref(anime)}'">
+      <div class="anime-card-poster">
+        <img src="${anime.poster||''}" alt="${anime.title||''}" loading="lazy" onerror="Utils.imgFallback(this)"/>
+        <div class="anime-card-overlay"><div class="play-btn-overlay">▶</div></div>
+        ${Utils.kindBadge(anime)}
+        ${anime.status==='airing'?'<span class="anime-card-badge">Efirda</span>':''}
+        ${anime.rating?`<span class="anime-card-rating">★ ${parseFloat(anime.rating).toFixed(1)}</span>`:''}
+      </div>
+      <div class="anime-card-info">
+        <div class="anime-card-title">${anime.title||'—'}</div>
+        <div class="anime-card-meta">
+          <span>${Utils.year(anime)}</span><span class="dot"></span>
+          <span>${Utils.epLabel(anime)}</span>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ---- Load animes ----
+async function loadAnimes() {
+  const grid = document.getElementById('animeGrid');
+  grid.innerHTML = Utils.skeleton(20);
+
+  const params = {
+    page: state.page,
+    page_size: state.pageSize,
+    ordering: state.ordering,
+  };
+  if (state.search) params.search = state.search;
+  if (state.kind) params.kind = state.kind;
+  if (activeFilters.genre) params.genres = activeFilters.genre;
+
+  try {
+    const data = await API.getAnimeList(params);
+    let list = data.results || data || [];
+    if (activeFilters.year === '2020') {
+      list = list.filter(a => Number(Utils.year(a)) <= 2020);
+    } else if (activeFilters.year) {
+      list = list.filter(a => String(Utils.year(a)) === String(activeFilters.year));
+    }
+    const total = list.length;
+    state.total = total;
+
+    document.getElementById('resultsCount').innerHTML =
+      `<strong>${total}</strong> ta nom topildi`;
+
+    if (!list.length) {
+      grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+        <div class="empty-icon">🎌</div>
+        <h3>Hech narsa topilmadi</h3>
+        <p>Filtrlarni o'zgartiring yoki boshqa nom qidiring</p>
+      </div>`;
+      document.getElementById('pagination').innerHTML = '';
+      return;
+    }
+
+    grid.classList.add('stagger');
+    grid.innerHTML = list.map(cardHTML).join('');
+    renderPagination(total);
+  } catch(e) {
+    grid.innerHTML = `<div class="error-state" style="grid-column:1/-1">
+      <h3>Yuklab bo‘lmadi</h3>
+      <p>Birozdan so‘ng qayta urinib ko‘ring.</p>
+      <button class="btn-primary" onclick="loadAnimes()" style="margin-top:1rem">Qayta urinish</button>
+    </div>`;
+    document.getElementById('resultsCount').innerHTML = 'Xatolik yuz berdi';
+  }
+}
+
+// ---- Pagination ----
+function renderPagination(total) {
+  const totalPages = Math.ceil(total / state.pageSize);
+  if (totalPages <= 1) { document.getElementById('pagination').innerHTML = ''; return; }
+  const cur = state.page;
+  let pages = [];
+  // Always show first, last, and pages near current
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || (i >= cur - 2 && i <= cur + 2)) pages.push(i);
+    else if (pages[pages.length-1] !== '...') pages.push('...');
+  }
+  document.getElementById('pagination').innerHTML = `
+    <button class="page-btn" onclick="goPage(${cur-1})" ${cur===1?'disabled':''}>←</button>
+    ${pages.map(p => p === '...'
+      ? `<span class="page-btn" style="cursor:default;pointer-events:none">…</span>`
+      : `<button class="page-btn ${p===cur?'active':''}" onclick="goPage(${p})">${p}</button>`
+    ).join('')}
+    <button class="page-btn" onclick="goPage(${cur+1})" ${cur===totalPages?'disabled':''}>→</button>
+  `;
+}
+function goPage(p) {
+  state.page = p;
+  loadAnimes();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ---- Search ----
+const doSearch = Utils.debounce(async (q) => {
+  if (q.length < 2) { hideSuggestions(); state.search = ''; loadAnimes(); return; }
+  state.search = q;
+  state.page = 1;
+  loadAnimes();
+  // Also show dropdown suggestions
+  try {
+    const data = await API.get(API.endpoints.search(q));
+    const list = (data.results || data || []).slice(0, 6);
+    showSuggestions(list);
+  } catch(e) { hideSuggestions(); }
+}, 350);
+
+document.getElementById('searchInput').addEventListener('input', (e) => {
+  const v = e.target.value.trim();
+  document.getElementById('searchClear').classList.toggle('visible', v.length > 0);
+  doSearch(v);
+});
+
+function showSuggestions(list) {
+  if (!list.length) { hideSuggestions(); return; }
+  const el = document.getElementById('suggestions');
+  el.innerHTML = list.map(a => `
+    <div class="suggestion-item" onclick="window.location.href='${Utils.titleHref(a)}'">
+      <div class="suggestion-thumb"><img src="${a.poster||''}" onerror="Utils.imgFallback(this)"/></div>
+      <div>
+        <div class="suggestion-title">${a.title||'—'}</div>
+        <div class="suggestion-sub">${Utils.jp(a.title)} • ${Utils.year(a)} • ${Utils.episodes(a)} ep</div>
+      </div>
+    </div>
+  `).join('');
+  el.classList.add('show');
+}
+function hideSuggestions() { document.getElementById('suggestions').classList.remove('show'); }
+
+function clearSearch() {
+  document.getElementById('searchInput').value = '';
+  document.getElementById('searchClear').classList.remove('visible');
+  hideSuggestions();
+  state.search = '';
+  state.page = 1;
+  loadAnimes();
+}
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.search-bar-wrap')) hideSuggestions();
+});
+
+document.querySelectorAll('#kindPills button').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#kindPills button').forEach((el) => el.classList.toggle('active', el === btn));
+    state.kind = btn.dataset.kind || null;
+    state.page = 1;
+    loadAnimes();
+  });
+});
+
+// ---- INIT ----
+loadGenres().then(() => {
+  const gid = urlParams.get('genre');
+  if (gid) {
+    activeFilters.genre = gid;
+    document.querySelectorAll('#genreCloud .genre-tag').forEach(t => t.classList.remove('active'));
+    const el = document.querySelector(`#genreCloud [data-genre="${gid}"]`);
+    if (el) el.classList.add('active');
+  }
+  if (window.matchMedia('(min-width: 901px)').matches) {
+    document.querySelector('.year-details')?.setAttribute('open', '');
+  }
+  if (state.kind) {
+    document.querySelectorAll('#kindPills button').forEach((el) => {
+      el.classList.toggle('active', el.dataset.kind === state.kind);
+    });
+  }
+  loadAnimes();
+});
+</script>
+</body>
+</html>

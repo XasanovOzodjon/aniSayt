@@ -1,0 +1,1467 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <title>Ko‘rish — Animee</title>
+  <link rel="stylesheet" href="{% static 'css/global.css' %}?v=animee120"/>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
+  <style>
+    .player-body .sakura { display: none; }
+    .watch-page {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 380px;
+      gap: 1.35rem;
+      max-width: 1380px;
+      margin: 0 auto;
+      padding: calc(var(--navbar-h) + 1.1rem) 1.4rem 4.5rem;
+      align-items: start;
+    }
+    .watch-primary { min-width: 0; }
+    .video-area { background: transparent; }
+    .video-wrapper {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background: #050010;
+      overflow: hidden;
+      cursor: pointer;
+      touch-action: manipulation;
+      user-select: none;
+      border-radius: 0.9rem;
+    }
+    .video-wrapper video {
+      width: 100%; height: 100%;
+      display: block;
+      object-fit: contain;
+      background: #000;
+    }
+    .player-poster {
+      position: absolute; inset: 0; z-index: 5;
+      background: #090012 center / contain no-repeat;
+    }
+    .player-poster::after {
+      content: "";
+      position: absolute; inset: 0;
+      background: linear-gradient(180deg, rgba(7,0,22,.55) 0%, rgba(7,0,22,.12) 42%, rgba(7,0,22,.7) 100%);
+    }
+    .player-poster.hidden { display: none; }
+    .player-hud-top, .custom-controls, .player-age, .big-play {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .22s ease;
+    }
+    .video-wrapper.paused .player-hud-top,
+    .video-wrapper.paused .custom-controls,
+    .video-wrapper.paused .big-play,
+    .video-wrapper:not(.has-started) .player-age,
+    .video-wrapper.show-ui .player-hud-top,
+    .video-wrapper.show-ui .custom-controls {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .video-wrapper.is-playing:not(.show-ui) .custom-controls {
+      opacity: 1;
+      pointer-events: auto;
+      background: transparent;
+    }
+    .video-wrapper.is-playing:not(.show-ui) .controls-row {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .video-wrapper:not(.has-started) .player-age { pointer-events: none; }
+    .player-hud-top {
+      position: absolute; left: 0; right: 0; top: 0; z-index: 14;
+      display: flex; align-items: center; gap: .5rem;
+      padding: calc(.7rem + env(safe-area-inset-top)) .9rem .9rem;
+      background: linear-gradient(180deg, rgba(0,0,0,.72), transparent);
+    }
+    .hud-ico {
+      width: 2.35rem; height: 2.35rem; flex-shrink: 0;
+      border-radius: 10px;
+      border: 0;
+      background: rgba(0,0,0,.38);
+      color: #fff;
+      display: grid; place-items: center;
+      backdrop-filter: blur(8px);
+    }
+    .hud-ico svg { width: 1.15rem; height: 1.15rem; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .player-hud-top .now { min-width: 0; flex: 1; }
+    .player-hud-top .now strong {
+      display: block; color: #fff; font-size: .92rem;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .player-hud-top .now span {
+      display: block; font-size: .72rem; color: rgba(255,255,255,.72);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .custom-controls {
+      position: absolute;
+      left: 0; right: 0; bottom: 0; z-index: 14;
+      padding: 2.4rem 1rem calc(.85rem + env(safe-area-inset-bottom));
+      background: linear-gradient(to top, rgba(0,0,0,.88), transparent);
+    }
+    .progress-wrap {
+      height: 14px;
+      display: flex; align-items: center;
+      cursor: pointer;
+      margin-bottom: .55rem;
+    }
+    .progress-track {
+      position: relative; width: 100%; height: 4px;
+      background: rgba(255,255,255,.22);
+      border-radius: 99px;
+    }
+    .progress-wrap:hover .progress-track, .progress-wrap:active .progress-track { height: 6px; }
+    .progress-bar, .progress-buffered {
+      position: absolute; left: 0; top: 0; height: 100%;
+      border-radius: 99px; pointer-events: none;
+    }
+    .progress-buffered { background: rgba(255,255,255,.28); }
+    .progress-bar {
+      background: #fff;
+    }
+    .progress-knob {
+      position: absolute; top: 50%; width: 12px; height: 12px;
+      border-radius: 50%; background: #fff;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      box-shadow: 0 0 0 3px rgba(255,255,255,.12);
+    }
+    .controls-row { display: flex; align-items: center; gap: .15rem; }
+    .ctrl-btn {
+      background: transparent; color: #fff; border: 0;
+      width: 2.4rem; height: 2.4rem; padding: 0;
+      display: grid; place-items: center; border-radius: 10px;
+    }
+    .ctrl-btn svg { width: 1.28rem; height: 1.28rem; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .ctrl-btn.play svg { width: 1.55rem; height: 1.55rem; }
+    .ctrl-btn.fill svg { fill: currentColor; stroke: none; }
+    .ico-pause { display: none; }
+    .video-wrapper.is-playing .ico-play { display: none; }
+    .video-wrapper.is-playing .ico-pause { display: block; }
+    .time-display { font-size: .78rem; color: rgba(255,255,255,.86); font-variant-numeric: tabular-nums; padding: 0 .35rem; }
+    .ctrl-spacer { flex: 1; }
+    .volume-wrap { display: flex; align-items: center; }
+    .volume-slider { width: 70px; accent-color: #fff; }
+    .quality-menu, .speed-menu { position: relative; }
+    .quality-dropdown, .speed-dropdown {
+      display: none; position: absolute; bottom: 118%; right: 0;
+      background: rgba(12,4,28,.96); border: 1px solid rgba(255,255,255,.12);
+      border-radius: .7rem; min-width: 108px; overflow: hidden;
+    }
+    .quality-dropdown.show, .speed-dropdown.show { display: block; }
+    .quality-opt { padding: .5rem .8rem; font-size: .8rem; cursor: pointer; color: rgba(255,255,255,.75); }
+    .quality-opt.active { color: #fff; background: rgba(255,255,255,.08); }
+    .player-loading {
+      position: absolute; inset: 0; z-index: 8;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,.28);
+    }
+    .big-play {
+      position: absolute; inset: 0; z-index: 9;
+      display: flex; align-items: center; justify-content: center;
+      background: transparent;
+      border: 0;
+      padding: 0;
+    }
+    .big-play.hidden { display: none !important; }
+    .big-play-btn {
+      width: 72px; height: 72px;
+      border-radius: 14px;
+      border: 2px solid rgba(255,255,255,.92);
+      background: rgba(0,0,0,.22);
+      display: grid; place-items: center;
+      backdrop-filter: blur(4px);
+    }
+    .big-play-btn svg { width: 28px; height: 28px; fill: #fff; margin-left: 3px; }
+    .player-age {
+      position: absolute; left: 14px; bottom: calc(18px + env(safe-area-inset-bottom)); z-index: 10;
+      background: #e23b3b;
+      color: #fff;
+      font-size: .68rem; font-weight: 800;
+      letter-spacing: .04em;
+      padding: .16rem .38rem;
+      border-radius: 4px;
+    }
+    .video-wrapper:not(.has-started) .custom-controls {
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
+    .player-age.hidden { display: none; }
+    .player-empty {
+      position: absolute; inset: 0; z-index: 7;
+      display: flex; align-items: flex-end;
+      padding: 1.6rem;
+      background: linear-gradient(to top, rgba(5,0,16,0.94), rgba(5,0,16,0.25));
+    }
+    .player-empty.hidden { display: none; }
+    .ep-scrim {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(2,0,10,0.62);
+      z-index: 28;
+    }
+    .ep-scrim.show { display: block; }
+    .ep-sidebar {
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      display: flex; flex-direction: column;
+      border-radius: 0.95rem;
+      position: sticky;
+      top: calc(var(--navbar-h) + 1.1rem);
+      max-height: calc(100vh - var(--navbar-h) - 1.8rem);
+    }
+    .sidebar-head {
+      padding: 0.9rem 1rem;
+      display: flex; justify-content: space-between; align-items: center;
+      font-family: var(--font-display); letter-spacing: 0.04em;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar-ep-list { overflow: auto; padding: 0.7rem; flex: 1; }
+    .sidebar-ep-item {
+      display: flex; gap: 0.65rem; align-items: center; padding: 0.5rem;
+      border-radius: 0.75rem; cursor: pointer; margin-bottom: 0.3rem;
+    }
+    .sidebar-ep-item:hover { background: var(--bg-elevated); }
+    .sidebar-ep-item.active { background: var(--accent-dim); box-shadow: inset 0 0 0 1px var(--accent); }
+    .sidebar-ep-idx {
+      font-family: var(--font-display);
+      font-size: 0.78rem;
+      color: var(--accent-2);
+      width: 1.6rem;
+      flex-shrink: 0;
+    }
+    .sidebar-ep-thumb { width: 86px; height: 50px; border-radius: 0.4rem; overflow: hidden; position: relative; flex-shrink: 0; }
+    .sidebar-ep-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .sidebar-ep-num {
+      position: absolute; bottom: 3px; right: 3px;
+      background: rgba(0,0,0,0.7); font-size: 0.65rem; padding: 1px 4px; border-radius: 4px;
+    }
+    .sidebar-ep-title { font-size: 0.82rem; font-weight: 700; }
+    .now-live {
+      font-size: 0.62rem; letter-spacing: 0.12em; color: var(--accent);
+      font-weight: 800;
+    }
+    .sheet-btn, .sheet-close, .party-chat-btn { display: none; }
+    .player-page.party-on { grid-template-columns: minmax(0, 1fr) 340px; }
+    .player-page.party-on .ep-sidebar { display: none; }
+    .watch-title {
+      margin: 0.85rem 0 0.7rem;
+      font-family: var(--font-display);
+      font-size: clamp(1.15rem, 2vw, 1.45rem);
+      line-height: 1.25;
+    }
+    .watch-channel {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .watch-anime {
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
+      min-width: 0;
+      flex: 1;
+    }
+    .watch-anime img {
+      width: 2.7rem; height: 2.7rem;
+      border-radius: 50%;
+      object-fit: cover;
+      background: var(--bg-elevated);
+      flex-shrink: 0;
+    }
+    .watch-anime strong { display: block; font-size: 0.95rem; }
+    .watch-anime span { font-size: 0.72rem; color: var(--text-muted); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+    .watch-lists, .watch-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+    .watch-ico {
+      position: relative;
+      width: 2.45rem; height: 2.45rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.04);
+      color: var(--text-secondary);
+      display: grid; place-items: center;
+    }
+    .watch-ico svg { width: 1.15rem; height: 1.15rem; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .watch-ico.is-on { color: #fff; background: var(--accent-dim); box-shadow: inset 0 0 0 1px var(--accent); }
+    .watch-ico:hover::after, .watch-like:hover::after {
+      content: attr(data-tip);
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%);
+      white-space: nowrap;
+      background: #1a0a36;
+      color: #fff;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 0.28rem 0.5rem;
+      border-radius: 0.4rem;
+      border: 1px solid var(--border);
+      z-index: 4;
+    }
+    .watch-like, .watch-share {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      height: 2.45rem;
+      padding: 0 0.85rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.04);
+      color: #fff;
+      font-weight: 700;
+      font-size: 0.82rem;
+      position: relative;
+    }
+    .watch-like svg, .watch-share svg { width: 1.1rem; height: 1.1rem; fill: none; stroke: currentColor; stroke-width: 2; }
+    .watch-like.is-on { background: var(--accent-dim); box-shadow: inset 0 0 0 1px var(--accent); }
+    .watch-like.is-on svg { fill: currentColor; }
+    .watch-comments { margin-top: 1.35rem; }
+    .watch-comments h2 { font-size: 1.05rem; margin-bottom: 0.85rem; }
+    .comment-form, .reply-form {
+      display: flex;
+      gap: 0.7rem;
+      align-items: flex-start;
+      margin-bottom: 1.1rem;
+    }
+    .comment-ava {
+      width: 2.2rem; height: 2.2rem; border-radius: 50%;
+      object-fit: cover; background: var(--accent-dim); flex-shrink: 0;
+    }
+    .comment-ava.letter {
+      display: grid; place-items: center; font-weight: 800; color: var(--accent);
+    }
+    .comment-form textarea, .reply-form textarea {
+      flex: 1;
+      min-height: 2.6rem;
+      resize: vertical;
+      border: 0;
+      border-bottom: 1px solid var(--border);
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      padding: 0.45rem 0;
+    }
+    .comment-form button, .reply-form button {
+      border-radius: 999px;
+      padding: 0.4rem 0.9rem;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 800;
+      font-size: 0.78rem;
+    }
+    .comment-item { display: flex; gap: 0.7rem; margin-bottom: 1.05rem; }
+    .comment-body strong { display: inline; font-size: 0.8rem; margin-right: 0.4rem; }
+    .comment-body time { font-size: 0.72rem; color: var(--text-muted); }
+    .comment-body p { margin: 0.25rem 0 0.4rem; white-space: pre-wrap; }
+    .comment-tools { display: flex; gap: 0.55rem; align-items: center; }
+    .comment-tools button {
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 0;
+    }
+    .comment-tools button.is-on { color: var(--accent); }
+    .comment-replies { margin: 0.7rem 0 0 2.8rem; }
+    .comment-gate { color: var(--text-secondary); font-size: 0.9rem; }
+    .comment-gate a { color: var(--accent); font-weight: 800; }
+    .party-dock {
+      display: none;
+      flex-direction: column;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      border-radius: 0.95rem;
+      position: sticky;
+      top: calc(var(--navbar-h) + 1.1rem);
+      max-height: calc(100vh - var(--navbar-h) - 1.8rem);
+    }
+    .player-page.party-on .party-dock { display: flex; }
+    .party-dock-head {
+      padding: 0.85rem 1rem;
+      display: flex; align-items: center; gap: 0.45rem;
+      border-bottom: 1px solid var(--border);
+      font-family: var(--font-display);
+    }
+    .party-dock-head strong { flex: 1; }
+    .party-code {
+      font-size: 0.72rem; letter-spacing: 0.08em; color: var(--accent-2);
+      text-transform: uppercase;
+    }
+    .party-members { padding: 0.65rem 0.9rem; display: flex; flex-direction: column; gap: 0.35rem; }
+    .party-member { display: flex; align-items: center; gap: 0.45rem; font-size: 0.8rem; color: var(--text-secondary); }
+    .party-member-ava {
+      width: 1.6rem; height: 1.6rem; border-radius: 50%; overflow: hidden;
+      background: var(--accent-dim); display: grid; place-items: center; font-weight: 800;
+    }
+    .party-member-ava img { width: 100%; height: 100%; object-fit: cover; }
+    .party-chat {
+      flex: 1; overflow: auto; padding: 0.6rem 0.9rem;
+      display: flex; flex-direction: column; gap: 0.45rem;
+      border-top: 1px solid var(--border);
+    }
+    .party-msg { font-size: 0.82rem; }
+    .party-msg strong { display: block; font-size: 0.72rem; color: var(--accent-2); }
+    .party-msg p { margin: 0.1rem 0 0; color: #fff; }
+    .party-msg.is-mine strong { color: var(--accent); }
+    .party-chat-form {
+      display: flex; gap: 0.4rem; padding: 0.7rem;
+      border-top: 1px solid var(--border);
+    }
+    .party-chat-form input {
+      flex: 1; border-radius: 999px; border: 1px solid var(--border);
+      background: rgba(255,255,255,0.05); color: #fff; padding: 0.45rem 0.8rem; font: inherit;
+    }
+    .party-dock-actions {
+      display: flex; flex-wrap: wrap; gap: 0.35rem; padding: 0 0.7rem 0.8rem;
+    }
+    .party-dock-actions button, .party-invite, .chrome-party {
+      border: 1px solid var(--accent);
+      background: var(--accent-dim);
+      color: #fff;
+      border-radius: 999px;
+      padding: 0.32rem 0.7rem;
+      font-size: 0.75rem;
+      font-weight: 800;
+    }
+    .party-dock-actions button.is-on { background: var(--accent); }
+    .party-host-opts {
+      display: flex; flex-direction: column; gap: 0.35rem;
+      padding: 0 0.85rem 0.9rem; font-size: 0.78rem; color: var(--text-secondary);
+    }
+    .party-host-opts[hidden] { display: none; }
+    .party-host-opts label { display: flex; align-items: center; gap: 0.4rem; cursor: pointer; }
+    .party-faces {
+      position: absolute; z-index: 12; pointer-events: none;
+      display: none; gap: 8px;
+      grid-template-columns: repeat(var(--party-cols, 1), minmax(0, 1fr));
+      grid-template-rows: repeat(var(--party-rows, 1), minmax(0, 1fr));
+    }
+    .party-faces.is-on {
+      display: grid;
+      align-items: stretch;
+      justify-items: stretch;
+      right: 10px; top: 58px; bottom: 86px;
+      width: min(44%, 400px);
+    }
+    .party-faces[data-count="2"] {
+      left: 10px; right: 10px; width: auto; top: auto;
+      height: min(48%, 300px);
+    }
+    .party-faces[data-count="3"],
+    .party-faces[data-count="4"] {
+      left: 10px; right: 10px; width: auto; top: auto;
+      height: min(56%, 380px);
+    }
+    .party-faces[data-count="5"],
+    .party-faces[data-count="6"],
+    .party-faces[data-count="7"],
+    .party-faces[data-count="8"] {
+      left: 10px; right: 10px; width: auto; top: auto;
+      height: min(60%, 420px);
+    }
+    .party-tile {
+      min-width: 0; min-height: 0; width: 100%; height: 100%;
+      align-self: stretch; justify-self: stretch;
+      border-radius: 14px; overflow: hidden;
+      position: relative; background: #160824 center / cover no-repeat;
+      border: 2px solid rgba(255,255,255,0.18);
+      pointer-events: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+      transition: border-color .16s ease, box-shadow .16s ease;
+    }
+    .party-tile.is-speaking {
+      border-color: #ff4de8;
+      box-shadow: 0 0 0 3px rgba(255,43,214,.5), 0 10px 28px rgba(255,43,214,.35);
+    }
+    .party-tile.is-muted .party-tile-mute { background: rgba(255,43,214,.88); }
+    .party-tile video {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%; object-fit: cover; display: block; background: #0b0314;
+    }
+    .party-tile-bar {
+      position: absolute; left: 0; right: 0; bottom: 0;
+      display: flex; align-items: center; gap: 6px;
+      padding: 18px 8px 7px;
+      background: linear-gradient(transparent, rgba(0,0,0,.78));
+    }
+    .party-tile-name {
+      min-width: 0; flex: 1;
+      font-size: 0.72rem; font-weight: 800; text-shadow: 0 1px 4px #000;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .party-tile-audio {
+      display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+    }
+    .party-tile-mute {
+      width: 28px; height: 28px; border: 0; border-radius: 999px;
+      background: rgba(0,0,0,.55); color: #fff; display: grid; place-items: center;
+      cursor: pointer;
+    }
+    .party-tile-mute svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .party-tile-vol {
+      width: 72px; height: 4px; accent-color: #ff4de8; cursor: pointer;
+    }
+    .party-live {
+      position: absolute; left: 12px; top: calc(12px + env(safe-area-inset-top)); z-index: 12;
+      font-size: 0.62rem; letter-spacing: 0.14em; font-weight: 900;
+      background: rgba(255,43,214,0.88); color: #fff;
+      padding: 0.22rem 0.5rem; border-radius: 999px;
+    }
+    .party-wait {
+      position: absolute; left: 50%; top: calc(12px + env(safe-area-inset-top)); transform: translateX(-50%);
+      z-index: 12; font-size: 0.75rem; background: rgba(0,0,0,0.7);
+      padding: 0.25rem 0.7rem; border-radius: 999px;
+    }
+    .chrome-party.hidden, .party-live.hidden, .party-chat-btn.hidden { display: none !important; }
+    @media (max-width: 1024px) {
+      .watch-page { grid-template-columns: 1fr; padding: calc(var(--navbar-h) + 0.7rem) 0.7rem calc(var(--tab-h) + 1.4rem); }
+      .video-wrapper { border-radius: 0; }
+      .volume-wrap .volume-slider { display: none; }
+      .ep-sidebar {
+        position: fixed; left: 0; right: 0; bottom: 0;
+        max-height: 72vh; z-index: 30;
+        transform: translateY(110%);
+        transition: transform 0.28s ease;
+        border-left: 0; border-top: 1px solid var(--accent);
+        border-radius: 1.2rem 1.2rem 0 0;
+        box-shadow: 0 -18px 50px rgba(255, 43, 214, 0.18);
+      }
+      .ep-sidebar.open { transform: translateY(0); }
+      .sheet-btn, .sheet-close { display: grid; }
+      .sheet-btn.hud-ico { display: grid; }
+      .sheet-close, .party-chat-btn {
+        padding: 0.25rem 0.7rem;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: transparent;
+        color: #fff;
+        font-size: 0.78rem;
+      }
+      .party-chat-btn { display: inline-flex; }
+      .party-faces.is-on {
+        left: 8px; right: 8px; width: auto; top: auto;
+        height: min(44%, 240px); bottom: 78px;
+      }
+      .party-faces[data-count="1"] { height: min(48%, 260px); }
+      .party-tile-vol { width: 56px; }
+      .player-page.party-on { grid-template-columns: 1fr; }
+      .player-page.party-on .ep-sidebar { display: flex; }
+      .party-dock {
+        position: fixed; left: 0; right: 0; bottom: 0;
+        max-height: 72vh; z-index: 31;
+        transform: translateY(110%);
+        transition: transform 0.28s ease;
+        border-left: 0; border-top: 1px solid var(--accent);
+        border-radius: 1.2rem 1.2rem 0 0;
+      }
+      .player-page.party-on .party-dock { display: flex; }
+      .party-dock.open { transform: translateY(0); }
+      .comment-replies { margin-left: 1.4rem; }
+    }
+    @media (max-width: 640px) {
+      .quality-menu { display: none; }
+      .ctrl-btn { width: 2.15rem; height: 2.15rem; }
+      .time-display { font-size: .7rem; }
+      .watch-channel { gap: 0.5rem; }
+    }
+  </style>
+</head>
+<body class="player-body">
+{% include "partials/nav.html" %}
+
+<script>
+window.ANIMEE_SITE = {{ site_json|default:'{"player_poster":""}'|safe }};
+</script>
+
+<div class="player-page watch-page" id="playerPage">
+  <div class="watch-primary">
+    <div class="video-area">
+      <div class="video-wrapper paused" id="videoWrapper">
+        <div class="party-live hidden" id="partyLivePill">BIRGALIKDA</div>
+        <div class="party-wait" id="partyWait" hidden>Kutilmoqda…</div>
+        <div class="party-faces" id="partyFaces"></div>
+        <div class="player-loading" id="playerLoading"><div class="spinner"></div></div>
+        <div class="player-empty hidden" id="playerEmpty">
+          <div class="player-empty-copy">
+            <div class="hero-badge" style="display:inline-flex;margin-bottom:.45rem">劇場 · cinema</div>
+            <h3>Video hali yuklanmagan</h3>
+            <p>Bu qism tez orada ochiladi.</p>
+          </div>
+        </div>
+        <div class="player-poster" id="playerPoster"></div>
+        <video id="videoEl" preload="metadata" playsinline webkit-playsinline></video>
+        <div class="player-hud-top" id="playerHud">
+          <a href="#" id="backLink" class="hud-ico chrome-back" aria-label="Orqaga">
+            <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+          </a>
+          <div class="now">
+            <strong id="nowTitle">Yuklanmoqda…</strong>
+            <span id="nowSub">Animee</span>
+          </div>
+          <button type="button" class="chrome-party" id="partyStartBtn">Birgalikda</button>
+          <button type="button" class="hud-ico" id="shareBtn" aria-label="Ulashish">
+            <svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>
+          </button>
+          <button type="button" class="hud-ico sheet-btn" id="sheetBtn" aria-label="Qismlar">
+            <svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="4" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="1.2" fill="currentColor" stroke="none"/></svg>
+          </button>
+          <button type="button" class="party-chat-btn hidden" id="partyChatBtn">Chat</button>
+        </div>
+        <button type="button" class="big-play" id="bigPlay" aria-label="Play">
+          <span class="big-play-btn">
+            <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          </span>
+        </button>
+        <div class="player-age" id="ageBadge">16+</div>
+        <div class="custom-controls" id="controls">
+          <div class="progress-wrap" id="progressWrap">
+            <div class="progress-track">
+              <div class="progress-buffered" id="progressBuffered" style="width:0"></div>
+              <div class="progress-bar" id="progressBar" style="width:0"></div>
+              <div class="progress-knob" id="progressKnob" style="left:0"></div>
+            </div>
+          </div>
+          <div class="controls-row">
+            <button class="ctrl-btn fill" onclick="skipBack()" aria-label="10 soniya orqaga">
+              <svg viewBox="0 0 24 24"><path d="M11 6L4 12l7 6V6z"/><path d="M20 6l-7 6 7 6V6z"/></svg>
+            </button>
+            <button class="ctrl-btn play fill" onclick="togglePlay()" id="playIcon" aria-label="Play">
+              <svg class="ico-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              <svg class="ico-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+            </button>
+            <button class="ctrl-btn fill" onclick="skipForward()" aria-label="10 soniya oldinga">
+              <svg viewBox="0 0 24 24"><path d="M4 6l7 6-7 6V6z"/><path d="M13 6l7 6-7 6V6z"/></svg>
+            </button>
+            <button class="ctrl-btn fill" onclick="nextEpisode()" id="nextBtn" aria-label="Keyingi qism">
+              <svg viewBox="0 0 24 24"><path d="M6 6l9 6-9 6V6z"/><path d="M18 6v12h2V6z"/></svg>
+            </button>
+            <span class="time-display" id="timeDisplay">0:00 / 0:00</span>
+            <div class="ctrl-spacer"></div>
+            <div class="volume-wrap">
+              <button class="ctrl-btn" onclick="toggleMute()" id="volIcon" aria-label="Ovoz">
+                <svg viewBox="0 0 24 24"><path d="M4 10v4h4l5 4V6L8 10H4z"/><path d="M16 9.5a4 4 0 010 5"/><path d="M18.5 7a7 7 0 010 10"/></svg>
+              </button>
+              <input type="range" class="volume-slider" min="0" max="1" step="0.05" value="1" id="volSlider" oninput="setVolume(this.value)"/>
+            </div>
+            <div class="speed-menu">
+              <button class="ctrl-btn" onclick="toggleSpeed()" id="speedBtn" aria-label="Tezlik">1x</button>
+              <div class="speed-dropdown" id="speedDropdown">
+                <div class="quality-opt" onclick="setSpeed(0.75,this)">0.75x</div>
+                <div class="quality-opt active" onclick="setSpeed(1,this)">1x</div>
+                <div class="quality-opt" onclick="setSpeed(1.25,this)">1.25x</div>
+                <div class="quality-opt" onclick="setSpeed(1.5,this)">1.5x</div>
+                <div class="quality-opt" onclick="setSpeed(2,this)">2x</div>
+              </div>
+            </div>
+            <div class="quality-menu">
+              <button class="ctrl-btn" onclick="toggleQuality()" aria-label="Sifat">HD</button>
+              <div class="quality-dropdown" id="qualityDropdown"></div>
+            </div>
+            <button class="ctrl-btn" onclick="togglePip()" aria-label="Kichik oyna">
+              <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><rect x="12" y="12" width="7" height="5" rx="1" fill="currentColor" stroke="none"/></svg>
+            </button>
+            <button class="ctrl-btn" onclick="toggleFullscreen()" aria-label="To‘liq ekran">
+              <svg viewBox="0 0 24 24"><path d="M8 4H4v4M16 4h4v4M8 20H4v-4M16 20h4v-4"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <h1 class="watch-title" id="watchHeading">Yuklanmoqda…</h1>
+    <div class="watch-channel">
+      <a class="watch-anime" id="watchAnimeLink" href="{% url 'catalog' %}">
+        <img id="watchPoster" alt="" src=""/>
+        <div>
+          <strong id="watchAnimeName">Animee</strong>
+          <span id="watchKind">Anime</span>
+        </div>
+      </a>
+      <div class="watch-lists" id="watchLists"></div>
+      <div class="watch-actions">
+        <button type="button" class="watch-like" id="likeBtn" data-tip="Like">
+          <svg viewBox="0 0 24 24"><path d="M7 10v11H4a1 1 0 01-1-1v-8a1 1 0 011-1h3zm4 11h7.4a2 2 0 001.94-1.5l2.1-8A2 2 0 0020.5 9H13V5a2 2 0 00-2-2h-.5L7 10"/></svg>
+          <span id="likeCount">0</span>
+        </button>
+        <button type="button" class="watch-share" id="shareBelowBtn" data-tip="Ulashish">
+          <svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>
+          Ulashish
+        </button>
+      </div>
+    </div>
+    <section class="watch-comments">
+      <h2><span id="commentCount">0</span> ta izoh</h2>
+      <div id="commentComposer"></div>
+      <div id="commentList"></div>
+    </section>
+  </div>
+
+  <aside class="ep-sidebar" id="epSidebar">
+    <div class="sidebar-head">
+      <span>Qismlar</span>
+      <span>
+        <span id="sidebarEpCount" style="font-size:.75rem;color:var(--text-muted);margin-right:.6rem"></span>
+        <button type="button" class="sheet-close" id="sheetClose">Yopish</button>
+      </span>
+    </div>
+    <div class="sidebar-ep-list" id="sidebarList">
+      <div class="spinner-wrap"><div class="spinner"></div></div>
+    </div>
+  </aside>
+
+  <aside class="party-dock" id="partyDock">
+    <div class="party-dock-head">
+      <strong>Birgalikda</strong>
+      <span class="party-code" id="partyCodeLabel"></span>
+      <button type="button" class="party-invite" id="partyInviteBtn">Taklif</button>
+      <button type="button" class="sheet-close" id="partyDockClose">Yopish</button>
+    </div>
+    <div class="party-members" id="partyMembers"></div>
+    <div class="party-chat" id="partyChatList"></div>
+    <form class="party-chat-form" id="partyChatForm">
+      <input id="partyChatInput" maxlength="500" placeholder="Xabar…" autocomplete="off"/>
+      <button class="party-invite" type="submit">Yuborish</button>
+    </form>
+    <div class="party-dock-actions">
+      <button type="button" id="partyCamBtn">Kamera</button>
+      <button type="button" id="partyMicBtn">Mikrofon</button>
+      <button type="button" id="partyControlBtn" hidden>Boshqaruv</button>
+      <button type="button" id="partyCloseBtn" hidden>Xonani yopish</button>
+    </div>
+    <div class="party-host-opts" id="partyHostOpts" hidden>
+      <label><input type="checkbox" id="partyReqCam"/> Kamera majburiy</label>
+      <label><input type="checkbox" id="partyReqMic"/> Mikrofon majburiy</label>
+    </div>
+  </aside>
+</div>
+<div class="ep-scrim" id="epScrim"></div>
+
+<script src="{% static 'js/api.js' %}?v=animee90"></script>
+<script src="{% static 'js/party.js' %}?v=animee81"></script>
+<script>
+const URLS = window.ANIMEE_URLS;
+window.ANIMEE_WATCH = {{ watch_json|default:'{}'|safe }};
+const params = new URLSearchParams(window.location.search);
+const episodeId = window.ANIMEE_WATCH.episode_id || params.get('episode');
+const partyCode = "{{ party_code|default:''|escapejs }}" || params.get('party') || '';
+if (!episodeId && !partyCode) Utils.toast('Qism topilmadi', 'error');
+
+const video = document.getElementById('videoEl');
+const wrap = document.getElementById('videoWrapper');
+const posterEl = document.getElementById('playerPoster');
+const ageBadge = document.getElementById('ageBadge');
+let hls = null;
+let allEpisodes = [];
+let currentEpIndex = 0;
+let currentEpisodeId = episodeId;
+let nextWatchPath = '';
+let hudTimer = null;
+let started = false;
+let resumeAt = 0;
+let resumeApplied = false;
+let resumeTries = 0;
+let lastSavedAt = 0;
+window.currentEpisodeId = currentEpisodeId;
+
+function setSheet(open) {
+  document.getElementById('epSidebar').classList.toggle('open', open);
+  if (!open) document.getElementById('partyDock')?.classList.remove('open');
+  const dockOpen = document.getElementById('partyDock')?.classList.contains('open');
+  document.getElementById('epScrim').classList.toggle('show', open || dockOpen);
+}
+document.getElementById('sheetBtn')?.addEventListener('click', (e) => { e.stopPropagation(); setSheet(true); });
+document.getElementById('sheetClose')?.addEventListener('click', () => setSheet(false));
+document.getElementById('epScrim')?.addEventListener('click', () => setSheet(false));
+document.getElementById('bigPlay')?.addEventListener('click', (e) => { e.stopPropagation(); togglePlay(); });
+document.getElementById('shareBtn')?.addEventListener('click', (e) => { e.stopPropagation(); shareNow(); });
+
+function pokeHud() {
+  wrap.classList.add('show-ui');
+  clearTimeout(hudTimer);
+  if (!video.paused && started) {
+    hudTimer = setTimeout(() => wrap.classList.remove('show-ui'), 2800);
+  }
+}
+
+function setPoster(url) {
+  const art = (window.ANIMEE_SITE && window.ANIMEE_SITE.player_poster) || url;
+  if (art) posterEl.style.backgroundImage = `url('${art}')`;
+  else posterEl.style.backgroundImage = '';
+}
+setPoster();
+
+function markPlaying(on) {
+  wrap.classList.toggle('is-playing', on);
+  wrap.classList.toggle('paused', !on);
+  if (on) {
+    started = true;
+    wrap.classList.add('has-started');
+    posterEl.classList.add('hidden');
+    ageBadge.classList.add('hidden');
+    document.getElementById('bigPlay').classList.add('hidden');
+    pokeHud();
+  } else {
+    document.getElementById('bigPlay').classList.remove('hidden');
+    wrap.classList.add('show-ui');
+    clearTimeout(hudTimer);
+    if (!started) {
+      posterEl.classList.remove('hidden');
+      ageBadge.classList.remove('hidden');
+    }
+  }
+}
+
+function initHLS(url) {
+  if (hls) { hls.destroy(); hls = null; }
+  if (Hls.isSupported() && url.includes('.m3u8')) {
+    hls = new Hls({
+      enableWorker: true,
+      lowLatencyMode: false,
+      backBufferLength: 30,
+      maxBufferLength: 10,
+      maxMaxBufferLength: 18,
+      maxBufferSize: 20 * 1000 * 1000,
+      maxBufferHole: 0.4,
+      startFragPrefetch: true,
+      maxLoadingDelay: 2,
+      maxStarvationDelay: 2,
+      fragLoadingMaxRetry: 4,
+      manifestLoadingMaxRetry: 3,
+      capLevelToPlayerSize: true,
+    });
+    hls.loadSource(url);
+    hls.attachMedia(video);
+    hls.on(Hls.Events.MANIFEST_PARSED, (e, data) => {
+      renderQualityMenu(data.levels);
+      trySeekResume();
+    });
+    hls.on(Hls.Events.ERROR, (e, data) => {
+      if (!data.fatal) return;
+      if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
+      else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
+      else Utils.toast('Video yuklanmadi', 'error');
+    });
+  } else if (video.canPlayType('application/vnd.apple.mpegurl') && url.includes('.m3u8')) {
+    video.src = url;
+  } else {
+    video.src = url;
+  }
+}
+function renderQualityMenu(levels) {
+  const el = document.getElementById('qualityDropdown');
+  if (!levels || !levels.length) { el.innerHTML = '<div class="quality-opt">Auto</div>'; return; }
+  el.innerHTML = `<div class="quality-opt active" onclick="setQuality(-1,this)">Auto</div>` +
+    levels.map((l,i) => `<div class="quality-opt" onclick="setQuality(${i},this)">${l.height ? l.height+'p' : i+1}</div>`).reverse().join('');
+}
+function setQuality(level, el) {
+  if (!hls) return;
+  hls.currentLevel = level;
+  document.querySelectorAll('#qualityDropdown .quality-opt').forEach(o => o.classList.remove('active'));
+  el.classList.add('active');
+  toggleQuality();
+}
+video.addEventListener('waiting', () => {
+  document.getElementById('playerLoading').style.display = 'flex';
+  if (window.PartyRoom?.active) PartyRoom.noteBuffer(true);
+});
+video.addEventListener('canplay', () => {
+  document.getElementById('playerLoading').style.display = 'none';
+  trySeekResume();
+  if (window.PartyRoom?.active) PartyRoom.noteBuffer(false);
+});
+video.addEventListener('loadedmetadata', trySeekResume);
+video.addEventListener('loadeddata', trySeekResume);
+video.addEventListener('durationchange', trySeekResume);
+video.addEventListener('seeked', () => {
+  if (resumeApplied || window.PartyRoom?.active) return;
+  if (resumeAt >= 5 && Math.abs((video.currentTime || 0) - resumeAt) < 1.5) {
+    markResumed(video.currentTime);
+  }
+});
+video.addEventListener('playing', () => {
+  document.getElementById('playerLoading').style.display = 'none';
+  markPlaying(true);
+});
+video.addEventListener('pause', () => {
+  markPlaying(false);
+  persistProgress(true);
+});
+video.addEventListener('timeupdate', () => {
+  updateProgress();
+  persistProgress(false);
+});
+video.addEventListener('progress', () => { updateBuffered(); trySeekResume(); });
+video.addEventListener('ended', () => {
+  markPlaying(false);
+  clearProgress();
+  if (window.PartyRoom?.active) return;
+  const prefs = Auth.user();
+  if (prefs && prefs.autoplay_next === false) return;
+  if (currentEpIndex < allEpisodes.length - 1) {
+    Utils.toast('Keyingi qism 5s da…', 'info');
+    setTimeout(() => switchEpisode(currentEpIndex + 1), 5000);
+  } else if (nextWatchPath) {
+    Utils.toast('Keyingi kino 5s da…', 'info');
+    setTimeout(() => { window.location.href = nextWatchPath; }, 5000);
+  }
+});
+function updateProgress() {
+  if (!video.duration) return;
+  const pct = (video.currentTime / video.duration) * 100;
+  document.getElementById('progressBar').style.width = pct + '%';
+  document.getElementById('progressKnob').style.left = pct + '%';
+  document.getElementById('timeDisplay').textContent = `${fmtTime(video.currentTime)} / ${fmtTime(video.duration)}`;
+}
+function updateBuffered() {
+  if (!video.duration || !video.buffered.length) return;
+  document.getElementById('progressBuffered').style.width = (video.buffered.end(video.buffered.length-1) / video.duration)*100 + '%';
+}
+function fmtTime(s) {
+  const m = Math.floor(s/60), sec = Math.floor(s%60);
+  return `${m}:${sec.toString().padStart(2,'0')}`;
+}
+
+function finishedWindow(position, duration) {
+  return duration > 30 && position >= duration - 12;
+}
+
+function markResumed(pos) {
+  if (resumeApplied) return;
+  resumeApplied = true;
+  updateProgress();
+  Utils.toast(`${fmtTime(pos)} dan davom`, 'info');
+}
+
+function trySeekResume() {
+  if (resumeApplied || window.PartyRoom?.active) return;
+  const t = resumeAt;
+  const dur = video.duration;
+  if (!t || t < 5) return;
+  if (!Number.isFinite(dur) || dur < 1) return;
+  if (finishedWindow(t, dur)) {
+    resumeAt = 0;
+    clearProgress();
+    return;
+  }
+  const pos = Math.min(t, Math.max(0, dur - 1));
+  if (Math.abs((video.currentTime || 0) - pos) < 1.5) {
+    markResumed(pos);
+    return;
+  }
+  if (resumeTries > 40) return;
+  resumeTries += 1;
+  try { video.currentTime = pos; } catch { /* not seekable yet */ }
+}
+
+async function loadResume(epId) {
+  resumeAt = 0;
+  resumeApplied = false;
+  resumeTries = 0;
+  const local = ProgressStore.get(epId);
+  let pos = local?.position || 0;
+  if (Auth.user()) {
+    try {
+      const row = await API.get(API.endpoints.progress(epId));
+      if (Number(row.position) > pos) pos = Number(row.position);
+    } catch { /* guest or offline — local */ }
+  }
+  resumeAt = pos >= 5 ? pos : 0;
+}
+
+function persistProgress(force) {
+  if (window.PartyRoom?.active || !currentEpisodeId) return;
+  const t = video.currentTime || 0;
+  const d = video.duration || 0;
+  if (t < 3) return;
+  if (!resumeApplied && resumeAt >= 5 && t < resumeAt - 2) return;
+  if (finishedWindow(t, d)) {
+    clearProgress();
+    return;
+  }
+  const now = Date.now();
+  if (!force && now - lastSavedAt < 4000) return;
+  lastSavedAt = now;
+  ProgressStore.set(currentEpisodeId, t, d);
+  if (window._resumeMeta) {
+    ContinueWatch.remember({
+      ...window._resumeMeta,
+      episode_id: currentEpisodeId,
+      position: t,
+      duration: d,
+    });
+  }
+  const token = localStorage.getItem('animee_access');
+  if (!Auth.user() || !token) return;
+  const body = JSON.stringify({ position: t, duration: d });
+  const url = API.endpoints.progress(currentEpisodeId);
+  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+  if (force && navigator.sendBeacon && false) { /* PUT not supported by beacon */ }
+  fetch(url, { method: 'PUT', headers, body, keepalive: Boolean(force) }).catch(() => {});
+}
+
+function clearProgress() {
+  if (!currentEpisodeId) return;
+  ProgressStore.clear(currentEpisodeId);
+  if (Auth.user()) {
+    API.delete(API.endpoints.progress(currentEpisodeId)).catch(() => {});
+  }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) persistProgress(true);
+});
+window.addEventListener('pagehide', () => persistProgress(true));
+function startPlayback() {
+  trySeekResume();
+  const play = () => video.play().catch(() => markPlaying(false));
+  if (resumeAt >= 5 && !resumeApplied && Math.abs((video.currentTime || 0) - resumeAt) > 1.5) {
+    let launched = false;
+    const done = () => {
+      if (launched) return;
+      launched = true;
+      video.removeEventListener('seeked', done);
+      play();
+    };
+    video.addEventListener('seeked', done);
+    setTimeout(done, 900);
+    return;
+  }
+  play();
+}
+function togglePlay() {
+  if (window.PartyRoom?.active) { PartyRoom.requestPlayToggle(); return; }
+  if (video.paused) startPlayback();
+  else video.pause();
+}
+function skipBack() { skipBy(-10); }
+function skipForward() { skipBy(10); }
+function skipBy(delta) {
+  if (window.PartyRoom?.active) { PartyRoom.requestSkip(delta); return; }
+  const now = performance.now();
+  const base = (now - (window._skipAt || 0) < 180 && window._skipTo != null)
+    ? window._skipTo
+    : (video.currentTime || 0);
+  window._skipTo = Math.max(0, Math.min(video.duration || 0, base + delta));
+  window._skipAt = now;
+  video.currentTime = window._skipTo;
+}
+function nextEpisode() {
+  if (currentEpIndex < allEpisodes.length - 1) switchEpisode(currentEpIndex + 1);
+  else if (nextWatchPath) window.location.href = nextWatchPath;
+  else Utils.toast('Bu oxirgi qism', 'info');
+}
+function setVolume(v) {
+  video.volume = parseFloat(v);
+  video.muted = video.volume === 0;
+}
+function toggleMute() {
+  video.muted = !video.muted;
+}
+function seekFromEvent(e) {
+  const track = document.querySelector('.progress-track');
+  const rect = track.getBoundingClientRect();
+  const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+  const t = Math.max(0, Math.min(1, x / rect.width)) * (video.duration || 0);
+  if (window.PartyRoom?.active) { PartyRoom.requestSeek(t); return; }
+  video.currentTime = t;
+}
+function toggleFullscreen() {
+  const node = wrap;
+  if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+    (node.requestFullscreen || node.webkitRequestFullscreen)?.call(node);
+  } else {
+    (document.exitFullscreen || document.webkitExitFullscreen)?.call(document);
+  }
+}
+async function togglePip() {
+  try {
+    if (document.pictureInPictureElement) await document.exitPictureInPicture();
+    else if (video.requestPictureInPicture) await video.requestPictureInPicture();
+  } catch {
+    Utils.toast('Kichik oyna ochilmadi', 'info');
+  }
+}
+function toggleQuality() { document.getElementById('qualityDropdown').classList.toggle('show'); }
+function toggleSpeed() { document.getElementById('speedDropdown').classList.toggle('show'); }
+function setSpeed(rate, el) {
+  if (window.PartyRoom?.active) {
+    Utils.toast('Birgalikda 1x tezlikda', 'info');
+    return;
+  }
+  video.playbackRate = rate;
+  document.getElementById('speedBtn').textContent = rate === 1 ? '1x' : rate + 'x';
+  document.querySelectorAll('#speedDropdown .quality-opt').forEach((o) => o.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('speedDropdown').classList.remove('show');
+}
+async function shareNow() {
+  const data = { title: document.title, url: location.href };
+  try {
+    if (navigator.share) await navigator.share(data);
+    else {
+      await navigator.clipboard.writeText(data.url);
+      Utils.toast('Havola nusxalandi', 'success');
+    }
+  } catch { /* user cancelled */ }
+}
+
+const KIND_UI = { anime: 'Anime', film: 'Kino', drama: 'Drama', serial: 'Serial' };
+const LIST_BTNS = [
+  { id: 'watching', tip: 'Ko‘ryapman', path: 'M8 5v14l11-7z' },
+  { id: 'planned', tip: 'Ko‘rmoqchiman', path: 'M12 8v5l3 2M12 22a10 10 0 110-20 10 10 0 010 20z' },
+  { id: 'completed', tip: 'Ko‘rib bo‘ldim', path: 'M20 6L9 17l-5-5' },
+  { id: 'dropped', tip: 'Qiziq emas', path: 'M18 6L6 18M6 6l12 12' },
+  { id: 'favorite', tip: 'Sevimli', path: 'M12 21s-7-4.4-9.5-8.5C.7 9.2 2.2 5 6.2 5c2.1 0 3.4 1.2 5.8 3.6C14.4 6.2 15.7 5 17.8 5c4 0 5.5 4.2 3.7 7.5C19 16.6 12 21 12 21z' },
+];
+let watchAnime = null;
+let listStatus = null;
+
+function needUser(msg) {
+  if (Auth.user()) return true;
+  Utils.toast(msg || 'Kirish kerak', 'info');
+  setTimeout(() => {
+    location.href = (URLS.auth || '/auth/') + '?next=' + encodeURIComponent(location.pathname + location.search);
+  }, 400);
+  return false;
+}
+
+function paintLists() {
+  const el = document.getElementById('watchLists');
+  if (!el) return;
+  el.innerHTML = LIST_BTNS.map((b) => `
+    <button type="button" class="watch-ico ${listStatus === b.id ? 'is-on' : ''}" data-list="${b.id}" data-tip="${b.tip}" aria-label="${b.tip}">
+      <svg viewBox="0 0 24 24"><path d="${b.path}"/></svg>
+    </button>
+  `).join('');
+  el.querySelectorAll('[data-list]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      if (!needUser('Ro‘yxat uchun kiring') || !watchAnime) return;
+      const status = btn.dataset.list;
+      try {
+        if (listStatus === status) {
+          await Lists.remove(watchAnime.id);
+          listStatus = null;
+        } else {
+          await Lists.set(watchAnime, status);
+          listStatus = status;
+        }
+        paintLists();
+      } catch (ex) { Utils.toast(ex.message || 'Xato', 'error'); }
+    });
+  });
+}
+
+async function loadLists() {
+  listStatus = null;
+  if (Auth.user() && watchAnime) {
+    const row = await Lists.status(watchAnime.id);
+    listStatus = row.status || null;
+  }
+  paintLists();
+}
+
+function paintLike(state) {
+  const btn = document.getElementById('likeBtn');
+  const count = document.getElementById('likeCount');
+  if (!btn || !count) return;
+  btn.classList.toggle('is-on', Boolean(state.liked));
+  count.textContent = state.likes || 0;
+}
+
+async function loadLikes() {
+  if (!currentEpisodeId) return;
+  try {
+    paintLike(await API.get(API.endpoints.episodeLike(currentEpisodeId)));
+  } catch { paintLike({ likes: 0, liked: false }); }
+}
+
+function userAva() {
+  const me = Auth.user();
+  const src = me?.photo || '';
+  if (src) return `<img class="comment-ava" src="${src}" alt=""/>`;
+  const letter = (me?.username || 'A').slice(0, 1).toUpperCase();
+  return `<span class="comment-ava letter">${letter}</span>`;
+}
+
+function ago(iso) {
+  const s = Math.max(0, (Date.now() - new Date(iso)) / 1000);
+  if (s < 60) return 'hozir';
+  if (s < 3600) return `${Math.floor(s / 60)} daq`;
+  if (s < 86400) return `${Math.floor(s / 3600)} soat`;
+  return `${Math.floor(s / 86400)} kun`;
+}
+
+function commentCard(row, nested) {
+  const photo = row.user?.photo
+    ? `<img class="comment-ava" src="${row.user.photo}" alt=""/>`
+    : `<span class="comment-ava letter">${(row.user?.username || '?').slice(0, 1).toUpperCase()}</span>`;
+  const replies = (row.replies || []).map((r) => commentCard(r, true)).join('');
+  return `
+    <article class="comment-item" data-cid="${row.id}">
+      ${photo}
+      <div class="comment-body">
+        <strong>${row.user?.username || 'User'}</strong>
+        <time>${ago(row.created_at)}</time>
+        <p>${Utils.escapeHtml(row.body)}</p>
+        <div class="comment-tools">
+          <button type="button" class="${row.liked ? 'is-on' : ''}" data-clike="${row.id}">♥ ${row.likes || 0}</button>
+          ${nested ? '' : `<button type="button" data-reply="${row.id}">Javob</button>`}
+        </div>
+        ${nested ? '' : `<div class="reply-slot" id="replySlot${row.id}"></div>`}
+        ${replies ? `<div class="comment-replies">${replies}</div>` : ''}
+      </div>
+    </article>`;
+}
+
+function composerHtml(parentId) {
+  if (!Auth.user()) {
+    return `<p class="comment-gate"><a href="${URLS.auth}?next=${encodeURIComponent(location.pathname + location.search)}">Kiring</a> — izoh yozasiz.</p>`;
+  }
+  return `
+    <form class="comment-form" data-parent="${parentId || ''}">
+      ${userAva()}
+      <textarea name="body" maxlength="2000" placeholder="${parentId ? 'Javob…' : 'Izoh yozing…'}" required></textarea>
+      <button type="submit">${parentId ? 'Javob' : 'Yozish'}</button>
+    </form>`;
+}
+
+function bindCommentForms(root) {
+  root.querySelectorAll('form.comment-form').forEach((form) => {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!needUser('Izoh uchun kiring')) return;
+      const body = form.body.value.trim();
+      if (!body) return;
+      try {
+        await API.post(API.endpoints.comments(currentEpisodeId), {
+          body,
+          parent: form.dataset.parent || null,
+        });
+        form.reset();
+        await loadComments();
+      } catch (ex) { Utils.toast(ex.payload?.message || ex.message || 'Xato', 'error'); }
+    });
+  });
+}
+
+async function loadComments() {
+  if (!currentEpisodeId) return;
+  const box = document.getElementById('commentList');
+  const composer = document.getElementById('commentComposer');
+  composer.innerHTML = composerHtml('');
+  bindCommentForms(composer);
+  try {
+    const data = await API.get(API.endpoints.comments(currentEpisodeId));
+    document.getElementById('commentCount').textContent = data.count || 0;
+    const rows = data.results || [];
+    box.innerHTML = rows.length ? rows.map((row) => commentCard(row, false)).join('') : '<p class="comment-gate">Hali izoh yo‘q. Birinchi bo‘ling.</p>';
+    box.querySelectorAll('[data-clike]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        if (!needUser('Like uchun kiring')) return;
+        try {
+          const row = await API.post(API.endpoints.commentLike(btn.dataset.clike));
+          btn.textContent = `♥ ${row.likes}`;
+          btn.classList.toggle('is-on', row.liked);
+        } catch (ex) { Utils.toast(ex.message || 'Xato', 'error'); }
+      });
+    });
+    box.querySelectorAll('[data-reply]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        if (!needUser('Javob uchun kiring')) return;
+        const slot = document.getElementById(`replySlot${btn.dataset.reply}`);
+        if (!slot) return;
+        slot.innerHTML = composerHtml(btn.dataset.reply);
+        bindCommentForms(slot);
+        slot.querySelector('textarea')?.focus();
+      });
+    });
+  } catch {
+    box.innerHTML = '<p class="comment-gate">Izohlar ochilmadi.</p>';
+  }
+}
+
+async function fillWatch(ep) {
+  const heading = ep.title || `${ep.number || ''}-qism`;
+  document.getElementById('watchHeading').textContent = heading;
+  document.getElementById('watchAnimeName').textContent = ep.anime_title || 'Animee';
+  document.getElementById('watchKind').textContent = KIND_UI[ep.anime_kind] || 'Anime';
+  const poster = document.getElementById('watchPoster');
+  poster.src = ep.anime_poster || '';
+  poster.alt = ep.anime_title || '';
+  poster.style.display = ep.anime_poster ? '' : 'none';
+  document.getElementById('watchAnimeLink').href = ep.path || Utils.titleHref({
+    id: ep.anime_id, slug: ep.anime_slug, kind: ep.anime_kind,
+  });
+  watchAnime = { id: ep.anime_id, title: ep.anime_title, poster: ep.anime_poster };
+  await Promise.all([loadLists(), loadLikes(), loadComments()]);
+}
+
+document.getElementById('likeBtn')?.addEventListener('click', async () => {
+  if (!needUser('Like uchun kiring') || !currentEpisodeId) return;
+  try { paintLike(await API.post(API.endpoints.episodeLike(currentEpisodeId))); }
+  catch (ex) { Utils.toast(ex.payload?.message || ex.message || 'Xato', 'error'); }
+});
+document.getElementById('shareBelowBtn')?.addEventListener('click', (e) => { e.preventDefault(); shareNow(); });
+
+wrap.addEventListener('click', (e) => {
+  if (e.target.closest('button, a, input, .progress-wrap, .quality-menu, .speed-menu, .party-tile, .party-faces')) return;
+  togglePlay();
+});
+wrap.addEventListener('mousemove', pokeHud);
+wrap.addEventListener('touchstart', pokeHud, { passive: true });
+const progressWrap = document.getElementById('progressWrap');
+progressWrap.addEventListener('click', (e) => { e.stopPropagation(); seekFromEvent(e); });
+progressWrap.addEventListener('touchstart', (e) => { e.stopPropagation(); seekFromEvent(e); }, { passive: true });
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.quality-menu')) document.getElementById('qualityDropdown').classList.remove('show');
+  if (!e.target.closest('.speed-menu')) document.getElementById('speedDropdown').classList.remove('show');
+});
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (document.body.classList.contains('portal-open')) return;
+  if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+  if (e.code === 'ArrowLeft') skipBack();
+  if (e.code === 'ArrowRight') skipForward();
+  if (e.code === 'KeyN') nextEpisode();
+  if (e.code === 'KeyF') toggleFullscreen();
+  if (e.code === 'KeyM') toggleMute();
+  if (e.code === 'KeyE') setSheet(!document.getElementById('epSidebar').classList.contains('open'));
+});
+
+function applyEmpty(ep) {
+  const emptyEl = document.getElementById('playerEmpty');
+  document.getElementById('playerLoading').style.display = 'none';
+  emptyEl.classList.remove('hidden');
+  posterEl.classList.add('hidden');
+  ageBadge.classList.add('hidden');
+  document.getElementById('bigPlay').classList.add('hidden');
+  if (ep.anime_poster) {
+    emptyEl.style.backgroundImage = `linear-gradient(to top, rgba(5,0,16,0.92), rgba(5,0,16,0.3)), url('${ep.anime_poster}')`;
+    emptyEl.style.backgroundSize = 'cover';
+    emptyEl.style.backgroundPosition = 'center';
+  }
+}
+
+async function loadEpisode(epId, opts = {}) {
+  document.getElementById('playerLoading').style.display = 'flex';
+  started = false;
+  wrap.classList.remove('has-started', 'is-playing');
+  wrap.classList.add('paused');
+  try {
+    const ep = await API.get(API.endpoints.videoDetail(epId));
+    currentEpisodeId = ep.id;
+    window.currentEpisodeId = currentEpisodeId;
+    nextWatchPath = ep.next_watch_path || '';
+    document.title = `${ep.title || 'Epizod'} — Animee`;
+    document.getElementById('nowTitle').textContent = ep.title || `${ep.number || ''}-qism`;
+    document.getElementById('nowSub').textContent = ep.anime_title || 'Animee';
+    fillWatch(ep);
+    const back = document.getElementById('backLink');
+    back.href = Utils.titleHref({ id: ep.anime_id, slug: ep.anime_slug, kind: ep.anime_kind });
+    back.setAttribute('aria-label', ep.anime_title || 'Orqaga');
+    ageBadge.textContent = ep.age_rating || '16+';
+    const art = ep.anime_poster || ep.thumbnail || '';
+    setPoster(art);
+    const idle = (window.ANIMEE_SITE && window.ANIMEE_SITE.player_poster) || art;
+    if (idle) video.poster = idle;
+    window._resumeMeta = {
+      anime_id: ep.anime_id,
+      title: ep.anime_title,
+      epTitle: ep.title,
+      poster: ep.anime_poster,
+    };
+    ContinueWatch.remember({
+      anime_id: ep.anime_id,
+      episode_id: ep.id,
+      title: ep.anime_title,
+      epTitle: ep.title,
+      poster: ep.anime_poster,
+      slug: ep.anime_slug,
+      kind: ep.anime_kind,
+      watch_path: ep.watch_path,
+      number: ep.number,
+    });
+    if (opts.silent || window.PartyRoom?.active) {
+      resumeAt = 0;
+      resumeApplied = true;
+    } else {
+      await loadResume(ep.id);
+    }
+    const videoData = (ep.videos || [])[0] || {};
+    const url = videoData.hls_path || ep.hls_url || ep.video_url || ep.url || '';
+    const emptyEl = document.getElementById('playerEmpty');
+    const silent = opts.silent || window.PartyRoom?.active;
+    document.getElementById('playerLoading').style.display = 'none';
+    if (url) {
+      emptyEl.classList.add('hidden');
+      posterEl.classList.remove('hidden');
+      ageBadge.classList.remove('hidden');
+      document.getElementById('bigPlay').classList.remove('hidden');
+      initHLS(url);
+      if (!silent) {
+        /* wait for user tap — poster + play */
+      }
+    } else {
+      applyEmpty(ep);
+    }
+    if (ep.season && !allEpisodes.length) loadSidebarEpisodes(ep.season, epId);
+  } catch (e) {
+    document.getElementById('playerLoading').style.display = 'none';
+    document.getElementById('nowTitle').textContent = 'Epizod topilmadi';
+  }
+}
+
+async function loadSidebarEpisodes(seasonId, currentId) {
+  try {
+    const data = await API.get(API.endpoints.episodes(seasonId));
+    allEpisodes = data.results || data || [];
+    currentEpIndex = allEpisodes.findIndex(e => String(e.id) === String(currentId));
+    document.getElementById('sidebarEpCount').textContent = `${allEpisodes.length} ta`;
+    document.getElementById('sidebarList').innerHTML = allEpisodes.map((ep, i) => `
+      <div class="sidebar-ep-item ${i===currentEpIndex?'active':''}" onclick="switchEpisode(${i})">
+        <div class="sidebar-ep-idx">${String(ep.number||i+1).padStart(2,'0')}</div>
+        <div class="sidebar-ep-thumb">
+          <img src="${ep.thumbnail||''}" onerror="Utils.imgFallback(this)"/>
+          <span class="sidebar-ep-num">${ep.number||i+1}</span>
+        </div>
+        <div>
+          <div class="sidebar-ep-title">${ep.title || `${ep.number||i+1}-qism`}</div>
+          ${i===currentEpIndex ? '<span class="now-live">HOZIR</span>' : ''}
+        </div>
+      </div>
+    `).join('');
+  } catch {
+    document.getElementById('sidebarList').innerHTML = '<p class="error-state">Yuklab bo‘lmadi</p>';
+  }
+}
+
+function switchEpisode(index) {
+  if (window.PartyRoom?.active) {
+    Utils.toast('Xonada qism o‘zgarmaydi', 'info');
+    return;
+  }
+  if (index < 0 || index >= allEpisodes.length) return;
+  currentEpIndex = index;
+  const ep = allEpisodes[index];
+  currentEpisodeId = ep.id;
+  window.currentEpisodeId = currentEpisodeId;
+  history.replaceState(null, '', Utils.watchHref(ep, partyCode || undefined));
+  document.querySelectorAll('.sidebar-ep-item').forEach((el, i) => el.classList.toggle('active', i === index));
+  setSheet(false);
+  loadEpisode(ep.id);
+}
+if (partyCode) PartyRoom.join(partyCode);
+else if (episodeId) loadEpisode(episodeId);
+</script>
+</body>
+</html>

@@ -1,0 +1,89 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Hisob bloklangan — Animee</title>
+  <link rel="stylesheet" href="{% static 'css/global.css' %}?v=animee122"/>
+</head>
+<body class="ban-page">
+{% include "partials/nav.html" with active="" %}
+
+<div id="app">
+  <div class="page-container" id="banRoot">
+    <div class="profile-gate ban-gate">
+      <p class="dash-kicker">BAN</p>
+      <h1 class="detail-title" style="font-size:2rem;margin:.2rem 0 .6rem">Hisob bloklangan</h1>
+      <p id="banReason">Sabab yuklanmoqda…</p>
+      <p class="settings-hint" id="banUntil"></p>
+      <form id="banAppeal" class="dash-form" hidden>
+        <label>So‘rov <textarea name="body" required minlength="8" maxlength="800" placeholder="Nima uchun bandan ozod qilish kerak"></textarea></label>
+        <p class="auth-error" id="banErr"></p>
+        <button class="btn-primary" type="submit">So‘rov yuborish</button>
+      </form>
+      <p class="settings-hint" id="banAppealed" hidden>So‘rov yuborilgan. Javob kutilmoqda.</p>
+      <p class="settings-hint" id="banNoAppeal" hidden>Bu banda so‘rov yuborib bo‘lmaydi.</p>
+      <div class="profile-gate-actions">
+        <button type="button" class="btn-secondary" id="banOut">Chiqish</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer class="footer">
+  <div class="footer-logo">ANI<span>MEE</span></div>
+  <p>animee.uz — anime, drama va kino. © 2026</p>
+</footer>
+<script src="{% static 'js/api.js' %}?v=animee90"></script>
+<script>
+(async function () {
+  const urls = ANIMEE_URLS;
+  const session = Auth.user();
+  if (!session) {
+    location.href = `${urls.auth || '/auth/'}?next=/banned/`;
+    return;
+  }
+  let ban = session.banned;
+  try {
+    const me = await Auth.syncFromMe();
+    ban = me?.banned || ban;
+  } catch (ex) {
+    ban = ex.payload && ex.payload.code === 'banned' ? ex.payload : ban;
+  }
+  if (!ban) {
+    location.href = urls.profile || '/profile/';
+    return;
+  }
+  document.getElementById('banReason').textContent = ban.reason || 'Qoidabuzarlik';
+  if (ban.until) {
+    document.getElementById('banUntil').textContent = `Tugashi: ${ban.until.slice(0, 16).replace('T', ' ')}`;
+  }
+  if (ban.appealed) {
+    document.getElementById('banAppealed').hidden = false;
+  } else if (ban.allow_appeal) {
+    document.getElementById('banAppeal').hidden = false;
+  } else {
+    document.getElementById('banNoAppeal').hidden = false;
+  }
+  document.getElementById('banOut').addEventListener('click', () => {
+    Auth.clear();
+    location.href = urls.index || '/';
+  });
+  document.getElementById('banAppeal')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const err = document.getElementById('banErr');
+    if (err) err.textContent = '';
+    try {
+      await API.post(API.endpoints.banAppeal(), { body: new FormData(e.target).get('body') });
+      e.target.hidden = true;
+      document.getElementById('banAppealed').hidden = false;
+      Utils.toast('So‘rov yuborildi', 'success');
+    } catch (ex) {
+      if (err) err.textContent = ex.payload?.message || ex.message || 'Yuborilmadi';
+    }
+  });
+})();
+</script>
+</body>
+</html>

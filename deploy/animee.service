@@ -1,0 +1,15 @@
+[Unit]
+Description=Animee Daphne
+After=network.target postgresql.service redis.service
+
+[Service]
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/animee
+EnvironmentFile=/opt/animee/.env
+ExecStart=/opt/animee/.venv/bin/daphne -b 127.0.0.1 -p 8000 core.asgi:application
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

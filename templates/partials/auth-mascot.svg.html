@@ -1,0 +1,83 @@
+<svg class="auth-mascot-svg" viewBox="0 0 420 500" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <defs>
+    <linearGradient id="amHair" x1="30%" y1="5%" x2="80%" y2="90%">
+      <stop offset="0%" stop-color="#6b2a7a"/>
+      <stop offset="45%" stop-color="#241430"/>
+      <stop offset="100%" stop-color="#0b0614"/>
+    </linearGradient>
+    <linearGradient id="amCoat" x1="40%" y1="0%" x2="60%" y2="100%">
+      <stop offset="0%" stop-color="#321848"/>
+      <stop offset="100%" stop-color="#12081c"/>
+    </linearGradient>
+    <radialGradient id="amGlow" cx="50%" cy="40%" r="50%">
+      <stop offset="0%" stop-color="#ff2bd6" stop-opacity="0.28"/>
+      <stop offset="100%" stop-color="#00e5ff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <ellipse cx="210" cy="240" rx="175" ry="155" fill="url(#amGlow)"/>
+
+  <g fill="none" stroke="#ff2bd6" stroke-width="3" stroke-linecap="round" opacity="0.45">
+    <path d="M58 168c22-16 40-16 56 4"/>
+    <path d="M52 194c20-12 38-10 52 6"/>
+    <path d="M328 332c16 18 12 34-6 46"/>
+  </g>
+
+  <g transform="rotate(-16 210 70)">
+    <!-- dangling loaf body -->
+    <g stroke="#070016" stroke-width="7" stroke-linejoin="round">
+      <ellipse cx="176" cy="368" rx="34" ry="20" fill="url(#amCoat)" transform="rotate(-30 176 368)"/>
+      <ellipse cx="250" cy="372" rx="34" ry="20" fill="url(#amCoat)" transform="rotate(24 250 372)"/>
+      <ellipse cx="210" cy="328" rx="78" ry="52" fill="url(#amCoat)"/>
+      <path d="M150 300c20-16 100-16 122 8-20 10-82 8-122-8z" fill="url(#amCoat)"/>
+      <circle cx="210" cy="312" r="9" fill="#ffd36a"/>
+    </g>
+
+    <!-- hair halo: rounded spikes around head -->
+    <path fill="url(#amHair)" stroke="#070016" stroke-width="7" stroke-linejoin="round"
+      d="M210 36
+         C232 36 248 70 252 92
+         C278 70 318 78 328 108
+         C358 112 372 148 360 176
+         C386 196 384 236 360 250
+         C372 278 352 312 322 318
+         C318 348 278 362 250 346
+         C232 368 188 368 168 346
+         C138 362 98 346 92 316
+         C62 308 48 272 62 248
+         C40 228 42 188 68 172
+         C58 142 78 108 112 108
+         C122 76 164 36 210 36Z"/>
+
+    <ellipse cx="210" cy="214" rx="102" ry="92" fill="#f8e7d8" stroke="#070016" stroke-width="7"/>
+
+    <!-- bangs over forehead -->
+    <path fill="url(#amHair)" stroke="#070016" stroke-width="6" stroke-linejoin="round"
+      d="M118 176
+         C140 118 186 96 232 102
+         C268 106 304 128 322 168
+         C292 150 262 156 238 172
+         C214 154 178 150 148 168
+         C136 172 126 174 118 176Z"/>
+
+    <ellipse cx="138" cy="232" rx="20" ry="11" fill="#ff8eb8" opacity="0.5"/>
+    <ellipse cx="282" cy="230" rx="20" ry="11" fill="#ff8eb8" opacity="0.5"/>
+
+    <g class="am-eyes">
+      <g class="am-eye" transform="translate(148 212)">
+        <ellipse cx="0" cy="6" rx="30" ry="24" fill="#0b0712"/>
+        <path d="M-30 2 Q0 -16 30 2 L30 -8 Q0 -28 -30 -8Z" fill="#1a1024"/>
+        <circle class="pupil" cx="5" cy="9" r="7.5" fill="#00e5ff"/>
+        <circle cx="10" cy="1" r="4" fill="#fff"/>
+        <rect class="lid" x="-32" y="-26" width="64" height="54" rx="26" fill="#1a1024"/>
+      </g>
+      <g class="am-eye" transform="translate(272 210)">
+        <ellipse cx="0" cy="6" rx="30" ry="24" fill="#0b0712"/>
+        <path d="M-30 2 Q0 -16 30 2 L30 -8 Q0 -28 -30 -8Z" fill="#1a1024"/>
+        <circle class="pupil" cx="5" cy="9" r="7.5" fill="#00e5ff"/>
+        <circle cx="10" cy="1" r="4" fill="#fff"/>
+        <rect class="lid" x="-32" y="-26" width="64" height="54" rx="26" fill="#1a1024"/>
+      </g>
+    </g>
+  </g>
+</svg>

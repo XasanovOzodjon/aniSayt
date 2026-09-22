@@ -1,0 +1,129 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Bildirishnomalar — Animee</title>
+  <link rel="stylesheet" href="{% static 'css/global.css' %}?v=animee120"/>
+</head>
+<body>
+{% include "partials/nav.html" with active="notices" %}
+
+<div id="app">
+  <div class="page-container">
+    <div class="inbox-shell" id="inboxRoot">
+      <div class="spinner-wrap"><div class="spinner"></div></div>
+    </div>
+  </div>
+</div>
+
+<footer class="footer">
+  <div class="footer-logo">ANI<span>MEE</span></div>
+  <p>animee.uz — anime, drama va kino. © 2026</p>
+</footer>
+
+<script src="{% static 'js/api.js' %}?v=animee90"></script>
+<script>
+const root = document.getElementById('inboxRoot');
+const urls = ANIMEE_URLS;
+let filterUnread = false;
+
+function gate() {
+  root.innerHTML = `
+    <div class="profile-gate">
+      <h1 class="detail-title" style="font-size:2rem;margin:.2rem 0 .6rem">Bildirishnomalar</h1>
+      <p>Yangiliklar va yangi sezonlar shu yerda saqlanadi. O‘qish uchun kiring.</p>
+      <div class="profile-gate-actions">
+        <a class="btn-primary" href="${urls.auth}">Kirish</a>
+      </div>
+    </div>`;
+}
+
+function rowHtml(item) {
+  const poster = Utils.safeUrl(item.poster);
+  const href = item.href || (item.anime_id ? Utils.titleHref({ id: item.anime_id, slug: item.slug, kind: item.kind, path: item.path }) : urls.notices);
+  const read = item.read ? 'is-read' : 'is-unread';
+  const thumb = poster
+    ? `<img src="${poster}" alt="" onerror="Utils.imgFallback(this)"/>`
+    : `<span class="inbox-fallback">${Utils.escapeHtml((item.title || '?').slice(0, 1).toUpperCase())}</span>`;
+  return `
+    <article class="inbox-row ${read}" data-id="${item.id}" data-href="${Utils.escapeHtml(href)}">
+      <div class="inbox-thumb">${thumb}</div>
+      <div class="inbox-copy">
+        <p class="inbox-kicker">${Utils.escapeHtml(item.kind_label || Notices.kindLabel(item.kind))}</p>
+        <strong>${Utils.escapeHtml(item.title || 'Yangilik')}</strong>
+        <p>${Utils.escapeHtml(item.body || '')}</p>
+        <time>${Utils.escapeHtml(Utils.noticeTime(item.created_at))}</time>
+      </div>
+      ${item.read ? '' : '<i class="inbox-dot" aria-label="O‘qilmagan"></i>'}
+    </article>`;
+}
+
+function paint(data) {
+  const rows = data.results || [];
+  const unread = Number(data.unread_count) || 0;
+  Notices.paintBadge(unread);
+  root.innerHTML = `
+    <p class="search-portal-kicker">Hisob</p>
+    <div class="inbox-head">
+      <div>
+        <h1 class="detail-title" style="font-size:clamp(1.8rem,4vw,2.6rem);margin:.2rem 0 .35rem">Bildirishnomalar</h1>
+        <p class="settings-lead">Yangi sezon, qism va yangiliklar shu yerda qoladi. O‘qib chiqishingiz mumkin.</p>
+      </div>
+      ${unread ? `<button type="button" class="btn-secondary" id="markAll">Hammasini o‘qilgan qilish</button>` : ''}
+    </div>
+    <div class="inbox-tabs">
+      <button type="button" data-filter="all" class="${filterUnread ? '' : 'active'}">Barchasi</button>
+      <button type="button" data-filter="unread" class="${filterUnread ? 'active' : ''}">O‘qilmagan${unread ? ` · ${unread}` : ''}</button>
+    </div>
+    ${rows.length
+      ? `<div class="inbox-list">${rows.map(rowHtml).join('')}</div>`
+      : `<div class="inbox-empty">
+          <h3>${filterUnread ? 'O‘qilmagan xabar yo‘q' : 'Hali yangilik yo‘q'}</h3>
+          <p>${filterUnread
+            ? 'Barcha xabarlar o‘qilgan.'
+            : 'Ro‘yxatdagi serialga yangi sezon chiqsa, shu yerga tushadi. Telegram ulangan bo‘lsa, bot ham yozadi.'}</p>
+        </div>`}
+    <p class="settings-back"><a class="btn-secondary" href="${urls.settings}">Sozlamalar</a></p>
+  `;
+
+  root.querySelectorAll('.inbox-tabs button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      filterUnread = btn.dataset.filter === 'unread';
+      load();
+    });
+  });
+  document.getElementById('markAll')?.addEventListener('click', async () => {
+    await Notices.markAll();
+    Utils.toast('Barchasi o‘qilgan', 'success');
+    load();
+  });
+  root.querySelectorAll('.inbox-row').forEach((el) => {
+    el.addEventListener('click', async () => {
+      const id = el.dataset.id;
+      const href = el.dataset.href;
+      try { await Notices.markRead(id); } catch {}
+      if (href && href !== urls.notices) location.href = href;
+      else load();
+    });
+  });
+}
+
+async function load() {
+  try {
+    const data = await API.get(API.endpoints.notices(filterUnread));
+    paint(data);
+  } catch {
+    root.innerHTML = '<div class="empty-state"><h3>Bildirishnomalar yuklanmadi</h3></div>';
+  }
+}
+
+(async function init() {
+  if (!Auth.user()) { gate(); return; }
+  await Auth.syncFromMe();
+  load();
+})();
+</script>
+</body>
+</html>

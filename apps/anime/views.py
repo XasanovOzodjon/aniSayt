@@ -11,11 +11,11 @@ from drf_spectacular.utils import extend_schema_view, extend_schema
     get=extend_schema(tags=["Anime"]),
 )
 class AnimeListCreateView(ListAPIView):
-    queryset = Anime.objects.all()
+    queryset = Anime.objects.select_related('next_title').prefetch_related("genres", "seasons__episodes")
     serializer_class = AnimeSerializer
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['genres']
-    search_fields = ['title', 'description']
+    filterset_fields = ['genres', 'kind']
+    search_fields = ['title', 'description', 'slug']
     ordering_fields = ['id', 'title']
     ordering = ['-id']
 
@@ -24,7 +24,7 @@ class AnimeListCreateView(ListAPIView):
     get=extend_schema(tags=["Anime"]),
 )
 class AnimeDetailView(RetrieveAPIView):
-    queryset = Anime.objects.all()
+    queryset = Anime.objects.select_related('next_title').prefetch_related("genres", "seasons__episodes")
     serializer_class = AnimeSerializer
 
 

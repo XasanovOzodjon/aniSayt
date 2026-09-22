@@ -9,8 +9,11 @@ from rest_framework.response import Response
 from rest_framework import serializers, status
 from drf_spectacular.utils import extend_schema, OpenApiParameter, inline_serializer
 
+from rest_framework.permissions import AllowAny
+
 from apps.anime.models import Anime, Genre
 from apps.person.models import Person
+from apps.users.people import search_public
 from .serializers import AnimeSearchSerializer, PersonSearchSerializer, CombinedSearchSerializer
 
 # Minimal o'xshashlik chegarasi (0.0 - 1.0)
@@ -217,6 +220,15 @@ class CombinedSearchView(APIView):
 
         serializer = CombinedSearchSerializer(data, context={"request": request})
         return Response(serializer.data)
+
+
+class UserSearchView(APIView):
+    permission_classes = [AllowAny]
+
+    @extend_schema(tags=["Search"])
+    def get(self, request):
+        q = request.query_params.get('q', '').strip()
+        return Response({'results': search_public(q, request)})
 
 
 class GenreListView(APIView):

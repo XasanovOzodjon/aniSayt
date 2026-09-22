@@ -34,7 +34,7 @@ class Video(models.Model):
     )
     language = models.CharField(max_length=50)
     translated_by = models.CharField(max_length=120, blank=True)
-    video = models.FileField(upload_to="episodes/videos/")
+    video = models.FileField(upload_to="episodes/videos/", blank=True, null=True)
     hls_path = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -42,14 +42,14 @@ class Video(models.Model):
         return f"{self.episode} ({self.language})"
 
     def delete(self, *args, **kwargs):
-        # Video fayl o'chirilsa, diskdan ham o'chirish
+        vid_id = self.pk
         if self.video:
-            if os.path.isfile(self.video.path):
-                os.remove(self.video.path)
-
-        # HLS papkasini o'chirish
-        hls_dir = os.path.join(settings.MEDIA_ROOT, "hls", str(self.id))
-        if os.path.isdir(hls_dir):
-            shutil.rmtree(hls_dir)
-
+            self.video.delete(save=False)
+        from apps.main import object_storage as store
+        if store.s3_enabled() and vid_id:
+            store.delete_prefix(f'hls/{vid_id}/')
+        else:
+            hls_dir = os.path.join(settings.MEDIA_ROOT, "hls", str(vid_id))
+            if os.path.isdir(hls_dir):
+                shutil.rmtree(hls_dir)
         super().delete(*args, **kwargs)

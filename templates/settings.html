@@ -1,0 +1,335 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Sozlamalar — Animee</title>
+  <link rel="stylesheet" href="{% static 'css/global.css' %}?v=animee120"/>
+</head>
+<body>
+{% include "partials/nav.html" with active="profile" %}
+
+<div id="app">
+  <div class="page-container">
+    <div class="settings-shell" id="settingsRoot">
+      <div class="spinner-wrap"><div class="spinner"></div></div>
+    </div>
+  </div>
+</div>
+
+<footer class="footer">
+  <div class="footer-logo">ANI<span>MEE</span></div>
+  <p>animee.uz — anime, drama va kino. © 2026</p>
+</footer>
+
+<script src="{% static 'js/api.js' %}?v=animee90"></script>
+<script>
+const root = document.getElementById('settingsRoot');
+const urls = ANIMEE_URLS;
+
+function gate() {
+  root.innerHTML = `
+    <div class="profile-gate">
+      <h1 class="detail-title" style="font-size:2rem;margin:.2rem 0 .6rem">Sozlamalar</h1>
+      <p>Profil, Telegram va bildirishnomalar uchun kiring.</p>
+      <div class="profile-gate-actions">
+        <a class="btn-primary" href="${urls.auth}">Kirish</a>
+      </div>
+    </div>`;
+}
+
+function pressed(on) {
+  return on ? 'true' : 'false';
+}
+
+function avatarBlock(user) {
+  const photo = Utils.safeUrl(user.photo);
+  const letter = Utils.escapeHtml((user.username || '?').slice(0, 1).toUpperCase());
+  const face = photo
+    ? `<img src="${photo}" alt="">`
+    : letter;
+  return `
+    <div class="settings-avatar-wrap">
+      <button type="button" class="settings-avatar" id="avatarBtn" aria-label="Profil rasmini yuklash">${face}</button>
+      <div>
+        <strong>Profil rasmi</strong>
+        <p>JPG, PNG yoki WEBP. 2 MB gacha. Rasm profil va navigatsiyada ko‘rinadi.</p>
+        <div class="settings-avatar-actions">
+          <button type="button" class="btn-secondary" id="avatarPick">Rasm yuklash</button>
+          ${photo ? `<button type="button" class="btn-secondary" id="avatarClear">Olib tashlash</button>` : ''}
+        </div>
+        <input id="avatarFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden/>
+      </div>
+    </div>`;
+}
+
+function toggleRow(id, title, hint, on) {
+  return `
+    <div class="settings-row">
+      <div>
+        <strong>${title}</strong>
+        <p>${hint}</p>
+      </div>
+      <button type="button" class="settings-toggle" id="${id}" aria-pressed="${pressed(on)}"><i></i></button>
+    </div>`;
+}
+
+function paint(user) {
+  const linked = Boolean(user.telegram_linked);
+  const tgName = user.telegram_username ? '@' + user.telegram_username.replace(/^@/, '') : '';
+  root.innerHTML = `
+    <p class="search-portal-kicker">Hisob</p>
+    <h1 class="detail-title" style="font-size:clamp(1.8rem,4vw,2.6rem);margin:.2rem 0 .35rem">Sozlamalar</h1>
+    <p class="settings-lead">Profil, tomosha, Telegram bot va yangi sezon xabarlari.</p>
+
+    <section class="settings-card">
+      <h2 class="settings-h">Profil</h2>
+      ${avatarBlock(user)}
+      <form id="accountForm">
+        <p class="auth-error" id="setErr"></p>
+        <div class="auth-field">
+          <label for="setUser">Username</label>
+          <input id="setUser" name="username" minlength="3" maxlength="30" required value="${Utils.escapeHtml(user.username || '')}"/>
+        </div>
+        <div class="auth-field">
+          <label for="setBio">Bio</label>
+          <textarea id="setBio" name="bio" maxlength="280" rows="3" placeholder="Qisqa ta’rif — nima ko‘rishni yaxshi ko‘rasiz">${Utils.escapeHtml(user.bio || '')}</textarea>
+        </div>
+        <div class="auth-field">
+          <label>Email</label>
+          <input value="${Utils.escapeHtml(user.email || '—')}" disabled/>
+          <span class="settings-hint">Emailni o‘zgartirish hozircha yo‘q.</span>
+        </div>
+        <button class="btn-primary auth-submit" type="submit">Profilni saqlash</button>
+      </form>
+    </section>
+
+    <section class="settings-card">
+      <h2 class="settings-h">Tomosha</h2>
+      <p class="settings-copy">Player yangi qismni ochganda shu tanlovlar ishlatiladi.</p>
+      <div class="auth-field">
+        <label for="setAudio">Ovoz tili</label>
+        <select id="setAudio" class="sort-select" style="width:100%">
+          <option value="uz" ${user.preferred_audio === 'ru' ? '' : 'selected'}>O‘zbekcha dublyaj</option>
+          <option value="ru" ${user.preferred_audio === 'ru' ? 'selected' : ''}>Ruscha dublyaj</option>
+        </select>
+      </div>
+      <div class="auth-field">
+        <label for="setSubs">Subtitle</label>
+        <select id="setSubs" class="sort-select" style="width:100%">
+          <option value="uz" ${user.preferred_subs === 'ru' || user.preferred_subs === 'off' ? '' : 'selected'}>O‘zbekcha</option>
+          <option value="ru" ${user.preferred_subs === 'ru' ? 'selected' : ''}>Ruscha</option>
+          <option value="off" ${user.preferred_subs === 'off' ? 'selected' : ''}>Yo‘q</option>
+        </select>
+      </div>
+      ${toggleRow('autoplayBtn', 'Keyingi qism avtomatik', 'Qism tugasa 5 soniyada keyingisi ochiladi.', user.autoplay_next !== false)}
+      <button class="btn-primary auth-submit" type="button" id="playSave">Tomoshani saqlash</button>
+    </section>
+
+    <section class="settings-card">
+      <h2 class="settings-h">Maxfiylik</h2>
+      ${toggleRow('publicBtn', 'Ochiq profil', `Boshqalar /u/${Utils.escapeHtml(user.username || '')}/ da ro‘yxatlaringizni ko‘radi.`, user.public_profile !== false)}
+      <button class="btn-primary auth-submit" type="button" id="privacySave">Maxfiylikni saqlash</button>
+    </section>
+
+    <section class="settings-card">
+      <h2 class="settings-h">Telegram bot</h2>
+      <p class="settings-copy">Yangi sezon chiqqanda xabar bot orqali keladi. Google yoki email bilan kirgan bo‘lsangiz, Telegramni shu yerda ulaysiz.</p>
+      <div class="settings-tg ${linked ? 'is-on' : 'is-off'}" id="tgBox">
+        <div>
+          <strong>${linked ? 'Telegram ulangan' : 'Telegram ulanmagan'}</strong>
+          <p>${linked
+            ? (tgName ? `${Utils.escapeHtml(tgName)} — yangi sezonlar shu chatga keladi.` : 'Hisobingiz botga bog‘langan.')
+            : 'Ro‘yxatdagi serialga yangi sezon chiqsa, bot yozishi uchun Telegramni ulash kerak.'}</p>
+        </div>
+        ${linked
+          ? `<button type="button" class="btn-secondary" id="tgUnlink">Uzish</button>`
+          : `<button type="button" class="btn-primary" id="tgLink">Telegramni ulash</button>`}
+      </div>
+      <p class="auth-error" id="tgErr"></p>
+    </section>
+
+    <section class="settings-card">
+      <h2 class="settings-h">Bildirishnomalar</h2>
+      <p class="settings-copy">Yangiliklar qo‘ng‘iroqda saqlanadi — kirib o‘qishingiz mumkin. Telegram ixtiyoriy: ulangan bo‘lsa, xabar botga ham ketadi.</p>
+      <p class="settings-back" style="margin:0 0 1rem"><a class="btn-secondary" href="${urls.notices}">Bildirishnomalarni ochish</a></p>
+      ${toggleRow('notifyTgBtn', 'Telegram orqali xabar', 'Botga yozishga ruxsat. O‘chirilgan bo‘lsa, xabar faqat saytda qoladi.', user.notify_telegram !== false)}
+      ${toggleRow('notifySeasonBtn', 'Yangi sezon', 'Ko‘rayotgan, rejadagi, sevimli yoki tugatgan serialingizga yangi sezon chiqsa xabar.', user.notify_new_season !== false)}
+      ${toggleRow('notifyEpBtn', 'Yangi qism', 'Keyinroq qism chiqishi uchun ham yoqib qo‘ying.', user.notify_new_episode !== false)}
+      <button class="btn-primary auth-submit" type="button" id="notifySave">Bildirishnomalarni saqlash</button>
+    </section>
+
+    <p class="settings-back"><a class="btn-secondary" href="${urls.profile}">← Profilga</a></p>
+  `;
+
+  bindToggles();
+  bindAvatar(user);
+  bindSaves();
+  bindTelegram(user);
+}
+
+function bindToggles() {
+  root.querySelectorAll('.settings-toggle').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      btn.setAttribute('aria-pressed', btn.getAttribute('aria-pressed') !== 'true');
+    });
+  });
+}
+
+function onFlag(id) {
+  return document.getElementById(id)?.getAttribute('aria-pressed') === 'true';
+}
+
+function applyUser(data) {
+  const cur = Auth.user() || {};
+  Auth.setSession(null, { ...cur, ...data });
+  Auth.bootNav();
+  return Auth.user();
+}
+
+function bindAvatar(user) {
+  const file = document.getElementById('avatarFile');
+  const pick = () => file.click();
+  document.getElementById('avatarBtn')?.addEventListener('click', pick);
+  document.getElementById('avatarPick')?.addEventListener('click', pick);
+  file?.addEventListener('change', async () => {
+    const chosen = file.files && file.files[0];
+    file.value = '';
+    if (!chosen) return;
+    if (chosen.size > 2 * 1024 * 1024) {
+      Utils.toast('Rasm 2 MB dan oshmasin', 'error');
+      return;
+    }
+    const body = new FormData();
+    body.append('photo', chosen);
+    try {
+      const data = await API.upload(API.endpoints.mePhoto(), body);
+      Utils.toast('Profil rasmi yangilandi', 'success');
+      paint(applyUser(data));
+    } catch (ex) {
+      Utils.toast(ex.payload?.message || ex.message || 'Rasm yuklanmadi.', 'error');
+    }
+  });
+  document.getElementById('avatarClear')?.addEventListener('click', async () => {
+    try {
+      const data = await API.delete(API.endpoints.mePhoto());
+      Utils.toast('Rasm olib tashlandi', 'info');
+      paint(applyUser(data));
+    } catch (ex) {
+      Utils.toast(ex.payload?.message || 'Rasm o‘chirilmadi.', 'error');
+    }
+  });
+}
+
+async function savePatch(payload, okText, errId) {
+  const err = errId ? document.getElementById(errId) : null;
+  if (err) err.textContent = '';
+  try {
+    const data = await API.patch(API.endpoints.me(), payload);
+    applyUser(data);
+    Utils.toast(okText, 'success');
+    return data;
+  } catch (ex) {
+    const msg = ex.payload?.message || ex.message || 'Saqlanmadi.';
+    if (err) err.textContent = msg;
+    else Utils.toast(msg, 'error');
+    return null;
+  }
+}
+
+function bindSaves() {
+  document.getElementById('accountForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const data = await savePatch({
+      username: document.getElementById('setUser').value.trim(),
+      bio: document.getElementById('setBio').value.trim(),
+    }, 'Profil saqlandi', 'setErr');
+    if (data) paint(data);
+  });
+  document.getElementById('playSave')?.addEventListener('click', async () => {
+    const data = await savePatch({
+      preferred_audio: document.getElementById('setAudio').value,
+      preferred_subs: document.getElementById('setSubs').value,
+      autoplay_next: onFlag('autoplayBtn'),
+    }, 'Tomosha sozlamalari saqlandi');
+    if (data) paint(data);
+  });
+  document.getElementById('privacySave')?.addEventListener('click', async () => {
+    const data = await savePatch({
+      public_profile: onFlag('publicBtn'),
+    }, 'Maxfiylik saqlandi');
+    if (data) paint(data);
+  });
+  document.getElementById('notifySave')?.addEventListener('click', async () => {
+    const notifyTelegram = onFlag('notifyTgBtn');
+    const data = await savePatch({
+      notify_telegram: notifyTelegram,
+      notify_new_season: onFlag('notifySeasonBtn'),
+      notify_new_episode: onFlag('notifyEpBtn'),
+    }, 'Bildirishnomalar saqlandi');
+    if (!data) return;
+    if (notifyTelegram && !data.telegram_linked) {
+      Utils.toast('Telegram ulanmagan — avval botni ulang.', 'info');
+    }
+    paint(data);
+  });
+}
+
+function bindTelegram(user) {
+  const err = document.getElementById('tgErr');
+  document.getElementById('tgLink')?.addEventListener('click', async () => {
+    const btn = document.getElementById('tgLink');
+    btn.disabled = true;
+    if (err) err.textContent = '';
+    try {
+      const start = await API.get(API.endpoints.telegramLogin('link'));
+      if (start.tg_url) window.open(start.tg_url, '_blank');
+      Utils.toast('Telegramda Start bosing — shu yerda kutamiz.', 'info');
+      btn.textContent = 'Kutilmoqda…';
+      for (let i = 0; i < 90; i += 1) {
+        await Utils.sleep(2000);
+        let poll;
+        try {
+          poll = await API.post(API.endpoints.telegramLogin(), { unicID: start.unicID });
+        } catch (ex) {
+          if (err) err.textContent = ex.payload?.message || 'Havola eskirgan.';
+          btn.disabled = false;
+          btn.textContent = 'Telegramni ulash';
+          return;
+        }
+        if (poll.status === 'pending') continue;
+        if (poll.status === 'linked' || poll.telegram_linked) {
+          const fresh = await Auth.syncFromMe() || applyUser(poll);
+          Utils.toast('Telegram ulandi', 'success');
+          paint(fresh);
+          return;
+        }
+      }
+      if (err) err.textContent = 'Vaqt tugadi. Qayta urinib ko‘ring.';
+    } catch (ex) {
+      if (err) err.textContent = ex.message || 'Telegram ochilmadi.';
+    }
+    btn.disabled = false;
+    btn.textContent = 'Telegramni ulash';
+  });
+  document.getElementById('tgUnlink')?.addEventListener('click', async () => {
+    if (!confirm('Telegramni hisobdan uzasizmi? Yangi sezonlar botga kelmaydi.')) return;
+    try {
+      const data = await API.post(API.endpoints.telegramUnlink(), {});
+      Utils.toast('Telegram uzildi', 'info');
+      paint(applyUser(data));
+    } catch (ex) {
+      if (err) err.textContent = ex.payload?.message || 'Uzilmadi.';
+    }
+  });
+}
+
+(async function init() {
+  if (!Auth.user()) { gate(); return; }
+  const user = await Auth.syncFromMe() || Auth.user();
+  paint(user);
+})();
+</script>
+</body>
+</html>

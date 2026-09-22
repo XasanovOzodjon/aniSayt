@@ -1,46 +1,43 @@
 services:
-  db:
-    image: postgres:16-alpine
-    env_file:
-      - .env
-    environment:
-      POSTGRES_DB: ${DB_NAME}
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redisdata:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 10
 
-  api:
-    build: .
-    env_file:
-      - .env
-    environment:
-      DB_HOST: db
-      DB_PORT: "5432"
+  coturn:
+    image: coturn/coturn:4.6.2
+    restart: unless-stopped
     ports:
-      - "8000:8000"
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    volumes:
-      - .:/app
-      - media_data:/app/media
+      - "3478:3478/tcp"
+      - "3478:3478/udp"
+      - "49160-49190:49160-49190/udp"
+    environment:
+      TURN_USERNAME: ${TURN_USERNAME:-animee}
+      TURN_CREDENTIAL: ${TURN_CREDENTIAL:-changeme}
+      TURN_REALM: ${TURN_REALM:-animee.uz}
+    command:
+      - -n
+      - --log-file=stdout
+      - --listening-port=3478
+      - --fingerprint
+      - --lt-cred-mech
+      - "--user=${TURN_USERNAME:-animee}:${TURN_CREDENTIAL:-changeme}"
+      - "--realm=${TURN_REALM:-animee.uz}"
+      - --no-cli
+      - --no-tls
+      - --no-dtls
+      - --min-port=49160
+      - --max-port=49190
+      - --listening-ip=0.0.0.0
 
 volumes:
-  postgres_data:
-  media_data:
+  redisdata:

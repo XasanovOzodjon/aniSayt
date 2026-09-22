@@ -4,12 +4,12 @@ from modeltranslation.admin import TranslationAdmin
 
 
 class AnimeAdmin(TranslationAdmin):
-    list_display = ("id", "title", "description")
+    list_display = ("id", "title", "kind", "age_rating")
     search_fields = ("title", "description")
-    list_filter = ("genres",)
+    list_filter = ("kind", "age_rating", "genres")
     fieldsets = (
         (None, {
-            'fields': ('title', 'description', 'poster')
+            'fields': ('title', 'description', 'poster', 'kind', 'age_rating', 'next_title')
         }),
         ('Genres', {
             'fields': ('genres',)

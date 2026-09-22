@@ -1,0 +1,257 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Birgalikda — Animee</title>
+  <link rel="stylesheet" href="{% static 'css/global.css' %}?v=animee120"/>
+  <style>
+    .party-kinds { display:flex; flex-wrap:wrap; gap:.45rem; margin: .7rem 0 1rem; }
+    .party-kinds button {
+      background: rgba(255,255,255,.05); color: var(--text-secondary);
+      border: 1px solid var(--border); border-radius: 999px; padding: .35rem .85rem; font-size: .85rem;
+    }
+    .party-kinds button.is-on { background: var(--accent-dim); color: var(--text-primary); border-color: var(--accent); }
+    .party-search { width:100%; background: var(--bg-elevated); border:1px solid var(--border); border-radius: var(--radius);
+      color: var(--text-primary); padding: .75rem 1rem; font-size: 1rem; }
+    .party-hits { margin-top:.65rem; display:flex; flex-direction:column; gap:.45rem; max-height:16rem; overflow:auto; }
+    .party-hit { display:flex; gap:.75rem; align-items:center; width:100%; text-align:left;
+      background: rgba(255,255,255,.04); border:1px solid var(--border); border-radius: var(--radius); padding:.5rem; }
+    .party-hit img { width:2.6rem; height:3.5rem; object-fit:cover; border-radius:.4rem; background:#1a0a3c; }
+    .party-hit.is-on { border-color: var(--accent); background: var(--accent-dim); }
+    .party-hit strong { display:block; }
+    .party-hit span { color: var(--text-muted); font-size:.8rem; }
+    .party-eps { display:flex; flex-wrap:wrap; gap:.4rem; margin-top:.85rem; }
+    .party-eps button {
+      min-width: 2.6rem; background: rgba(255,255,255,.05); color: var(--text-primary);
+      border:1px solid var(--border); border-radius:.6rem; padding:.4rem .55rem; font-size:.85rem;
+    }
+    .party-eps button.is-on { border-color: var(--accent); background: var(--accent-dim); }
+    .party-picked { margin-top:1rem; color: var(--text-secondary); }
+    .party-picker {
+      position: fixed; inset: 0; z-index: 80;
+      background: rgba(6,0,18,.72); backdrop-filter: blur(10px);
+      display: flex; align-items: flex-start; justify-content: center;
+      padding: calc(var(--navbar-h) + 1.2rem) 1rem 2rem;
+      overflow: auto;
+    }
+    .party-picker[hidden] { display: none !important; }
+    .party-picker-card {
+      width: min(560px, 100%);
+      background: var(--bg-card, #140824);
+      border: 1px solid var(--border);
+      border-radius: 1.1rem;
+      padding: 1.15rem 1.15rem 1.3rem;
+      box-shadow: 0 24px 60px rgba(0,0,0,.45);
+    }
+    .party-picker-head {
+      display: flex; align-items: center; justify-content: space-between; gap: .75rem;
+      margin-bottom: .85rem;
+    }
+    .party-picker-head strong { font-size: 1.15rem; }
+    .party-picker-close {
+      background: transparent; color: var(--text-secondary);
+      border: 1px solid var(--border); border-radius: 999px; padding: .28rem .75rem;
+    }
+  </style>
+</head>
+<body>
+{% include "partials/nav.html" with active="party" %}
+<div id="app">
+  <div class="page-container">
+    <div class="inbox-shell" id="partyRoot">
+      <p class="search-portal-kicker">Watch Party</p>
+      <h1 class="detail-title" style="font-size:clamp(1.8rem,4vw,2.6rem);margin:.2rem 0 .35rem">Birgalikda</h1>
+      <p class="settings-lead">Xona yaratishni bosing — nima ko‘rishni qidirib tanlaysiz.</p>
+
+      <section class="settings-card">
+        <h2 class="settings-h">Havola orqali kirish</h2>
+        <p class="settings-copy">Do‘stingiz yuborgan kodni yozing yoki to‘liq havolani oching.</p>
+        <form id="joinForm" class="party-join-row">
+          <input id="joinCode" maxlength="16" placeholder="masalan abcd2345" autocomplete="off"/>
+          <button class="btn-primary" type="submit">Kirish</button>
+        </form>
+        <p class="auth-error" id="joinErr"></p>
+      </section>
+
+      <section class="settings-card" id="createCard">
+        <h2 class="settings-h">Yangi xona</h2>
+        <p class="settings-copy">Avval xona yaratishni bosing. Keyin qidiruv ochiladi — anime, kino, drama yoki serialni tanlaysiz.</p>
+        <button type="button" class="btn-primary" id="openCreateBtn">Xona yaratish</button>
+      </section>
+    </div>
+  </div>
+</div>
+
+<div class="party-picker" id="createPicker" hidden>
+  <div class="party-picker-card" role="dialog" aria-labelledby="pickerTitle">
+    <div class="party-picker-head">
+      <strong id="pickerTitle">Nima ko‘ramiz?</strong>
+      <button type="button" class="party-picker-close" id="closePicker">Yopish</button>
+    </div>
+    <div class="party-kinds" id="kindRow">
+      <button type="button" data-kind="" class="is-on">Barchasi</button>
+      <button type="button" data-kind="anime">Anime</button>
+      <button type="button" data-kind="film">Kino</button>
+      <button type="button" data-kind="drama">Drama</button>
+      <button type="button" data-kind="serial">Serial</button>
+    </div>
+    <input id="titleSearch" class="party-search" placeholder="Nomini yozing…" autocomplete="off"/>
+    <div class="party-hits" id="titleHits"></div>
+    <div id="epWrap" hidden>
+      <p class="party-picked" id="pickedTitle"></p>
+      <div class="party-eps" id="epList"></div>
+    </div>
+    <button type="button" class="btn-primary" id="createBtn" style="margin-top:1rem" disabled>Xona ochish</button>
+    <p class="settings-hint" id="createHint"></p>
+  </div>
+</div>
+<footer class="footer">
+  <div class="footer-logo">ANI<span>MEE</span></div>
+  <p>animee.uz — anime, drama va kino. © 2026</p>
+</footer>
+<script src="{% static 'js/api.js' %}?v=animee90"></script>
+<script>
+const urls = ANIMEE_URLS;
+const pick = { kind: '', anime: null, episode: null };
+const picker = document.getElementById('createPicker');
+
+function openPicker() {
+  if (!Auth.user()) {
+    Auth.rememberNext(urls.party + '?create=1');
+    location.href = urls.auth + '?next=' + encodeURIComponent(urls.party + '?create=1');
+    return;
+  }
+  picker.hidden = false;
+  document.body.style.overflow = 'hidden';
+  setTimeout(() => document.getElementById('titleSearch')?.focus(), 40);
+}
+
+function closePicker() {
+  picker.hidden = true;
+  document.body.style.overflow = '';
+}
+
+document.getElementById('openCreateBtn').addEventListener('click', openPicker);
+document.getElementById('closePicker').addEventListener('click', closePicker);
+picker.addEventListener('click', (e) => { if (e.target === picker) closePicker(); });
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !picker.hidden) closePicker();
+});
+if (new URLSearchParams(location.search).get('create') === '1') openPicker();
+
+document.getElementById('joinForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const raw = document.getElementById('joinCode').value.trim();
+  const code = raw.replace(/.*\/party\//, '').replace(/\/$/, '').toLowerCase();
+  if (!code) {
+    document.getElementById('joinErr').textContent = 'Kod yozing';
+    return;
+  }
+  if (!Auth.user()) {
+    Auth.rememberNext(`${urls.party}${code}/`);
+    location.href = urls.auth + '?next=' + encodeURIComponent(`${urls.party}${code}/`);
+    return;
+  }
+  location.href = `${urls.party}${code}/`;
+});
+
+document.getElementById('kindRow').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-kind]');
+  if (!btn) return;
+  pick.kind = btn.dataset.kind;
+  document.querySelectorAll('#kindRow button').forEach((b) => b.classList.toggle('is-on', b === btn));
+  searchTitles(document.getElementById('titleSearch').value);
+});
+
+const searchTitles = Utils.debounce(async (q) => {
+  const hits = document.getElementById('titleHits');
+  const query = (q || '').trim();
+  if (query.length < 1) {
+    hits.innerHTML = '';
+    return;
+  }
+  const params = new URLSearchParams({ search: query });
+  if (pick.kind) params.set('kind', pick.kind);
+  try {
+    const data = await API.get(`${API.endpoints.animeList()}?${params}`);
+    const rows = Array.isArray(data) ? data : (data.results || []);
+    hits.innerHTML = rows.slice(0, 8).map((a) => `
+      <button type="button" class="party-hit" data-id="${a.id}">
+        <img src="${a.poster || ''}" alt="" onerror="Utils.imgFallback(this)"/>
+        <span><strong>${Utils.escapeHtml(a.title)}</strong><span>${Utils.kindLabel(a.kind)}</span></span>
+      </button>
+    `).join('') || '<p class="settings-hint">Topilmadi</p>';
+    hits.querySelectorAll('.party-hit').forEach((btn) => {
+      btn.addEventListener('click', () => chooseTitle(rows.find((a) => String(a.id) === btn.dataset.id)));
+    });
+  } catch (ex) {
+    hits.innerHTML = `<p class="settings-hint">${ex.message || 'Qidiruv ochilmadi'}</p>`;
+  }
+}, 280);
+
+document.getElementById('titleSearch').addEventListener('input', (e) => searchTitles(e.target.value));
+
+async function chooseTitle(anime) {
+  if (!anime) return;
+  pick.anime = anime;
+  pick.episode = null;
+  document.getElementById('createBtn').disabled = true;
+  document.querySelectorAll('.party-hit').forEach((b) => b.classList.toggle('is-on', String(b.dataset.id) === String(anime.id)));
+  const wrap = document.getElementById('epWrap');
+  wrap.hidden = false;
+  document.getElementById('pickedTitle').textContent = anime.title;
+  const detail = await API.get(API.endpoints.animeDetail(anime.id));
+  const eps = [];
+  (detail.seasons || []).forEach((s) => {
+    (s.episodes || []).forEach((ep) => {
+      eps.push({
+        ...ep,
+        season_number: s.number,
+        anime_slug: detail.slug,
+        anime_kind: detail.kind,
+      });
+    });
+  });
+  const list = document.getElementById('epList');
+  if (!eps.length) {
+    list.innerHTML = '<p class="settings-hint">Qism yo‘q</p>';
+    return;
+  }
+  list.innerHTML = eps.map((ep) => `
+    <button type="button" data-id="${ep.id}">${eps.length > 30 || (ep.season_number && ep.season_number !== 1) ? `S${ep.season_number}·` : ''}${ep.number}</button>
+  `).join('');
+  list.querySelectorAll('button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      pick.episode = eps.find((ep) => String(ep.id) === btn.dataset.id);
+      list.querySelectorAll('button').forEach((b) => b.classList.toggle('is-on', b === btn));
+      document.getElementById('createBtn').disabled = !pick.episode;
+      document.getElementById('createHint').textContent = pick.episode
+        ? `${anime.title} · ${pick.episode.number}-qism`
+        : '';
+    });
+  });
+}
+
+document.getElementById('createBtn').addEventListener('click', async () => {
+  if (!Auth.user()) {
+    Auth.rememberNext(urls.party);
+    location.href = urls.auth + '?next=' + encodeURIComponent(urls.party);
+    return;
+  }
+  if (!pick.episode) {
+    document.getElementById('createHint').textContent = 'Avval nom va qismni tanlang.';
+    return;
+  }
+  try {
+    document.getElementById('createHint').textContent = '';
+    const data = await API.post(API.endpoints.partyCreate(), { episode: pick.episode.id, control: 'shared' });
+    location.href = Utils.watchHref(data.episode || pick.episode, data.code);
+  } catch (ex) {
+    document.getElementById('createHint').textContent = ex.payload?.message || ex.message || 'Xona ochilmadi.';
+  }
+});
+</script>
+</body>
+</html>

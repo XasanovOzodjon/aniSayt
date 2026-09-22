@@ -1,0 +1,122 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Ro‘yxatlar — Animee</title>
+  <link rel="stylesheet" href="{% static 'css/global.css' %}?v=animee120"/>
+</head>
+<body>
+{% include "partials/nav.html" with active="lists" %}
+
+<div id="app">
+  <div class="page-container lists-page" id="listsRoot">
+    <div class="spinner-wrap"><div class="spinner"></div></div>
+  </div>
+</div>
+
+<footer class="footer">
+  <div class="footer-logo">ANI<span>MEE</span></div>
+  <p>animee.uz — anime, drama va kino. © 2026</p>
+</footer>
+
+<script src="{% static 'js/api.js' %}?v=animee90"></script>
+<script>
+const root = document.getElementById('listsRoot');
+const urls = ANIMEE_URLS;
+const STATUSES = [
+  ['watching', 'Ko‘ryapman'],
+  ['completed', 'Ko‘rib bo‘ldim'],
+  ['planned', 'Ko‘rmoqchiman'],
+  ['dropped', 'Qiziq emas'],
+  ['favorite', 'Sevimli'],
+];
+
+function card(a) {
+  return `
+    <div class="anime-card" onclick="location.href='${Utils.titleHref(a)}'">
+      <div class="anime-card-poster">
+        <img src="${a.poster||''}" alt="" onerror="Utils.imgFallback(this)"/>
+        <div class="anime-card-overlay"><div class="play-btn-overlay">▶</div></div>
+        ${Utils.kindBadge(a)}
+      </div>
+      <div class="anime-card-info">
+        <div class="anime-card-title">${Utils.escapeHtml(a.title||'—')}</div>
+        <div class="anime-card-meta"><span>${Utils.kindLabel(a.kind)}</span></div>
+      </div>
+    </div>`;
+}
+
+function gate() {
+  root.innerHTML = `
+    <div class="profile-gate">
+      <p class="search-portal-kicker">Mehmon</p>
+      <h1 class="detail-title" style="font-size:clamp(1.8rem,5vw,2.8rem);margin:.2rem 0 .6rem">Hisobga kiring</h1>
+      <div class="profile-gate-actions">
+        <a class="btn-primary" href="${urls.auth}">Kirish</a>
+        <a class="btn-secondary" href="${urls.catalog}">Katalogga</a>
+      </div>
+    </div>`;
+}
+
+function wantedStatus() {
+  const raw = new URLSearchParams(location.search).get('status') || 'watching';
+  return STATUSES.some(([key]) => key === raw) ? raw : 'watching';
+}
+
+async function render() {
+  const cont = ContinueWatch.all();
+  let counts = { watching: 0, completed: 0, planned: 0, dropped: 0, favorite: 0 };
+  let rows = [];
+  try {
+    const data = await Lists.mine();
+    counts = data.counts || counts;
+    rows = data.results || [];
+  } catch {}
+  const start = wantedStatus();
+  root.innerHTML = `
+    <div class="lists-head">
+      <h1>Ro‘yxatlar</h1>
+      <a class="btn-secondary" href="${urls.profile}">Profilga</a>
+    </div>
+    ${cont.length ? `
+    <h2 class="section-title" style="margin:0 0 .7rem">Davom ettirish</h2>
+    <div class="lists-continue">${cont.slice(0, 8).map((x) => `
+      <a href="${Utils.watchHref(x)}">
+        ${x.poster ? `<img src="${x.poster}" alt="" onerror="Utils.imgFallback(this)"/>` : '<div class="ph"></div>'}
+        <span><strong>${Utils.escapeHtml(x.title||'—')}</strong><small>${Utils.escapeHtml(x.epTitle||'')}</small></span>
+      </a>`).join('')}</div>` : ''}
+    <div class="profile-tabs" id="listTabs">
+      ${STATUSES.map(([key, label]) => `<button type="button" data-status="${key}" class="${key===start?'active':''}">${label} · ${counts[key] || 0}</button>`).join('')}
+    </div>
+    <div class="profile-grid" id="listGrid"></div>
+  `;
+  const tabs = [...document.querySelectorAll('#listTabs button')];
+  const paint = (status) => {
+    const grid = document.getElementById('listGrid');
+    const picked = rows.filter((r) => r.status === status);
+    grid.innerHTML = picked.length
+      ? picked.map((row) => card(row.anime || row)).join('')
+      : '';
+    const next = new URL(location.href);
+    next.searchParams.set('status', status);
+    history.replaceState({}, '', next);
+  };
+  tabs.forEach((tab) => {
+    tab.addEventListener('click', () => {
+      tabs.forEach((t) => t.classList.toggle('active', t === tab));
+      paint(tab.dataset.status);
+    });
+  });
+  paint(start);
+}
+
+(async function init() {
+  if (!Auth.user()) { gate(); return; }
+  await Auth.syncFromMe();
+  await render();
+})();
+</script>
+</body>
+</html>

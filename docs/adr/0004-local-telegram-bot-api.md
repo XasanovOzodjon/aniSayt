@@ -1,0 +1,3 @@
+# Local Telegram Bot API so episode files can reach S3
+
+Cloud Bot API `getFile` caps downloads at 20 MB, which cannot carry a real Episode Master. We run Telegram's local Bot API server so the ingest bot can pull files up to about 2 GB and copy them to S3. Files larger than that still need another path (compress or admin-panel upload). We rejected cloud-only Telegram ingest because it would make the "forward from Telegram, don't re-download" workflow impossible.

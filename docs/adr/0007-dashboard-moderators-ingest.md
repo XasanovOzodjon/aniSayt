@@ -1,0 +1,3 @@
+# Catalog dashboard: Admin vs Moderator; ingest file or URL, never HLS paste
+
+`/dashboard/` is split by Kind (anime, film/Kino, drama, serial), each with its own list and create form. Admin may appoint Moderators; a Moderator may manage catalog titles and Masters but not Users, Notices, or Watch Parties. A Master arrives as an uploaded video file or as an http(s) video URL that the server downloads; ffmpeg then derives HLS. Pasting an HLS/m3u8 URL is rejected so operators cannot skip ingest. Seasonal titles are edited on separate dashboard pages (title, Season, Episode); Film uses a Sequel instead of extra Episodes. See ADR 0010.

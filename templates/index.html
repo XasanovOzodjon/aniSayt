@@ -1,0 +1,515 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Animee — anime, drama, kino, serial</title>
+  <link rel="stylesheet" href="{% static 'css/global.css' %}?v=animee120"/>
+  <style>
+    /* ---- HERO ---- */
+    .hero {
+      position: relative;
+      height: 88vh;
+      min-height: 560px;
+      max-height: 800px;
+      display: flex;
+      align-items: flex-end;
+      overflow: hidden;
+      margin-bottom: 3rem;
+    }
+    .hero-bg {
+      position: absolute;
+      inset: 0;
+      background-size: cover;
+      background-position: center 20%;
+      transition: opacity 0.8s ease;
+    }
+    .hero-bg::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(to right, rgba(7,0,22,0.92) 38%, transparent 78%),
+        linear-gradient(to top, rgba(7,0,22,1) 0%, transparent 58%);
+    }
+    .hero-content {
+      position: relative;
+      z-index: 2;
+      padding: 0 2rem 3.5rem;
+      max-width: 640px;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--accent-dim);
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 4px 12px;
+      border-radius: 20px;
+      margin-bottom: 1rem;
+    }
+    .hero-title {
+      font-family: var(--font-display);
+      font-size: clamp(2.5rem, 6vw, 4.5rem);
+      line-height: 1;
+      letter-spacing: 2px;
+      color: #fff;
+      margin-bottom: 0.75rem;
+      text-shadow: 0 2px 20px rgba(0,0,0,0.5);
+    }
+    .hero-title-jp {
+      font-family: var(--font-jp);
+      font-size: clamp(0.85rem, 2vw, 1rem);
+      color: var(--text-secondary);
+      font-weight: 300;
+      letter-spacing: 3px;
+      margin-bottom: 1rem;
+    }
+    .hero-desc {
+      font-size: 0.95rem;
+      color: rgba(240,240,245,0.75);
+      line-height: 1.7;
+      margin-bottom: 1.5rem;
+      max-width: 480px;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .hero-meta {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1.75rem;
+      flex-wrap: wrap;
+    }
+    .hero-meta-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.83rem;
+      color: var(--text-secondary);
+    }
+    .hero-rating { color: var(--gold); font-weight: 700; font-size: 0.95rem; }
+    .hero-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+    .btn-hero {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1.75rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      border-radius: 8px;
+      letter-spacing: 0.3px;
+      transition: all var(--transition);
+    }
+    .btn-hero-primary {
+      background: var(--accent);
+      color: #fff;
+      box-shadow: 0 0 30px var(--accent-glow);
+    }
+    .btn-hero-primary:hover { filter: brightness(1.08); transform: translateY(-2px); box-shadow: 0 0 40px var(--accent-glow); }
+    .btn-hero-secondary {
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.2);
+      backdrop-filter: blur(8px);
+    }
+    .btn-hero-secondary:hover { background: rgba(255,255,255,0.18); }
+    .hero-thumbs {
+      position: absolute;
+      bottom: 2rem; right: 2rem;
+      display: flex;
+      gap: 0.5rem;
+      z-index: 3;
+    }
+    .hero-thumb {
+      width: 60px; height: 80px;
+      border-radius: 6px;
+      overflow: hidden;
+      cursor: pointer;
+      opacity: 0.5;
+      border: 2px solid transparent;
+      transition: all var(--transition);
+    }
+    .hero-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .hero-thumb.active { opacity: 1; border-color: var(--accent); }
+    .hero-thumb:hover { opacity: 0.85; }
+
+    /* ---- GENRE FILTER ROW ---- */
+    .genres-row {
+      display: flex;
+      gap: 0.5rem;
+      overflow-x: auto;
+      padding-bottom: 0.5rem;
+      scrollbar-width: none;
+      margin-bottom: 1.5rem;
+    }
+    .genres-row::-webkit-scrollbar { display: none; }
+
+    /* ---- TOP 10 list ---- */
+    .top-list {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding-right: 0.25rem;
+      scrollbar-width: thin;
+    }
+    .top-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.65rem 0.7rem;
+      border-radius: var(--radius);
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: all var(--transition);
+      flex-shrink: 0;
+    }
+    .top-item:hover { border-color: var(--border-hover); background: var(--bg-elevated); }
+    .top-rank {
+      font-family: var(--font-display);
+      font-size: 1.35rem;
+      color: var(--text-muted);
+      min-width: 32px;
+      text-align: center;
+    }
+    .top-rank.gold { color: var(--gold); }
+    .top-rank.silver { color: #aaa; }
+    .top-rank.bronze { color: #cd7f32; }
+    .top-thumb {
+      width: 44px; height: 60px;
+      border-radius: 5px;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .top-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .top-info { flex: 1; min-width: 0; }
+    .top-title { font-size: 0.88rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .top-sub { font-size: 0.73rem; color: var(--text-secondary); margin-top: 2px; }
+    .top-rating { font-size: 0.85rem; font-weight: 700; color: var(--gold); }
+
+    .home-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 18.5rem;
+      grid-template-rows: auto auto auto;
+      column-gap: 2rem;
+      align-items: stretch;
+    }
+    .home-grid > * { min-width: 0; }
+    .home-yangi-head,
+    .home-top-head {
+      min-height: 2.1rem;
+      align-self: end;
+    }
+    .top-list-wrap {
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+    }
+    .home-trending { grid-column: 1 / -1; }
+    .home-trending .section { padding-top: 2.25rem; padding-bottom: 2.25rem; }
+    .home-rail.scroll-row {
+      gap: 1rem;
+      min-width: 0;
+      flex-wrap: nowrap;
+      overscroll-behavior-x: contain;
+    }
+    #newReleasesRow.scroll-row .anime-card {
+      flex: 0 0 auto;
+      width: min(24.375rem, 100%);
+      min-width: min(24.375rem, 100%);
+      max-width: 100%;
+    }
+    #trendingGrid.scroll-row .anime-card {
+      flex: 0 0 auto;
+      width: min(11.2rem, 100%);
+      min-width: min(11.2rem, 100%);
+      max-width: 100%;
+    }
+    @media (max-width: 1100px) {
+      .home-grid { grid-template-columns: minmax(0, 1fr); }
+      .hero-thumbs { display: none; }
+      .top-list-wrap { height: 22rem; }
+    }
+    @media (max-width: 768px) {
+      .hero { height: 78vh; min-height: 420px; max-height: 640px; }
+      .hero-content { padding: 0 1rem 2.2rem; }
+      .hero-title { letter-spacing: 0; }
+      #newReleasesRow.scroll-row .anime-card {
+        width: min(10.4rem, 100%);
+        min-width: min(10.4rem, 100%);
+      }
+      #trendingGrid.scroll-row .anime-card {
+        width: min(9.5rem, 100%);
+        min-width: min(9.5rem, 100%);
+      }
+    }
+
+    .stagger > * {
+      opacity: 0;
+      animation: fadeIn 0.4s ease forwards;
+    }
+    .stagger > *:nth-child(1) { animation-delay: 0.05s; }
+    .stagger > *:nth-child(2) { animation-delay: 0.10s; }
+    .stagger > *:nth-child(3) { animation-delay: 0.15s; }
+    .stagger > *:nth-child(4) { animation-delay: 0.20s; }
+    .stagger > *:nth-child(5) { animation-delay: 0.25s; }
+    .stagger > *:nth-child(6) { animation-delay: 0.30s; }
+    .stagger > *:nth-child(7) { animation-delay: 0.35s; }
+    .stagger > *:nth-child(8) { animation-delay: 0.40s; }
+    @keyframes fadeIn { from { opacity:0; transform: translateY(16px); } to { opacity:1; transform: none; } }
+  </style>
+</head>
+<body>
+
+{% include "partials/nav.html" with active="home" %}
+
+<div class="hero" id="hero">
+  <div class="hero-bg" id="heroBg"></div>
+  <div class="hero-speedlines"></div>
+  <div class="kanji-watermark">アニメ</div>
+  <div class="hero-content" id="heroContent">
+    <div class="spinner-wrap"><div class="spinner"></div></div>
+  </div>
+  <div class="hero-thumbs" id="heroThumbs"></div>
+</div>
+
+<div class="page-container">
+  <div class="genres-row" id="genresRow">
+    <div class="skeleton-anim" style="height:30px;width:200px;border-radius:20px;flex-shrink:0;"></div>
+  </div>
+
+  <div class="home-grid">
+    <div class="section-header home-yangi-head">
+      <h2 class="section-title">Yangi chiqarganlar</h2>
+      <a href="{% url 'catalog' %}?sort=-id" class="section-link">Barchasi →</a>
+    </div>
+    <div class="section-header home-top-head">
+      <h2 class="section-title">TOP 10</h2>
+    </div>
+    <div class="scroll-row home-rail stagger" id="newReleasesRow"></div>
+    <div class="top-list-wrap">
+      <div class="top-list" id="topList">
+        <div class="spinner-wrap"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <div class="home-trending">
+      <div class="section">
+        <div class="section-header">
+          <h2 class="section-title">🔥 Trending</h2>
+          <a href="{% url 'catalog' %}?sort=-id" class="section-link">Barchasi →</a>
+        </div>
+        <div class="scroll-row home-rail stagger" id="trendingGrid"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer class="footer">
+  <div class="footer-logo">ANI<span>MEE</span></div>
+  <p>animee.uz — anime, drama, kino va serial. © 2026</p>
+</footer>
+
+<script src="{% static 'js/api.js' %}?v=animee90"></script>
+<script>
+const URLS = {
+  detail: "{% url 'detail' %}",
+  catalog: "{% url 'catalog' %}",
+};
+window.addEventListener('scroll', () => {
+  document.getElementById('navbar').classList.toggle('scrolled', window.scrollY > 60);
+});
+
+let heroAnimes = [];
+let heroIndex = 0;
+let heroTimer;
+
+function setHero(anime, index) {
+  heroIndex = index;
+  const bg = document.getElementById('heroBg');
+  const content = document.getElementById('heroContent');
+  bg.style.backgroundImage = `url('${anime.poster || ''}')`;
+  bg.style.opacity = '0';
+  setTimeout(() => { bg.style.opacity = '1'; }, 50);
+  content.innerHTML = `
+    <div class="hero-badge">${Utils.kindLabel(anime.kind)} · Tavsiya</div>
+    <div class="hero-title">${anime.title || ''}</div>
+    <div class="hero-title-jp">${Utils.jp(anime.title)}</div>
+    <p class="hero-desc">${anime.description || 'Tavsif mavjud emas.'}</p>
+    <div class="hero-meta">
+      ${anime.rating ? `<span class="hero-rating">★ ${anime.rating}</span>` : ''}
+      <span class="hero-meta-item">📅 ${Utils.year(anime)}</span>
+      <span class="hero-meta-item">🎬 ${Utils.epLabel(anime)}</span>
+      ${(anime.genres || []).slice(0,3).map(g =>
+        `<span class="genre-tag" style="padding:2px 8px;font-size:0.7rem;">${g.name || g}</span>`
+      ).join('')}
+    </div>
+    <div class="hero-actions">
+      <a href="${Utils.titleHref(anime)}" class="btn-hero btn-hero-primary">▶ Ko'rish</a>
+      <a href="${Utils.titleHref(anime)}" class="btn-hero btn-hero-secondary">ℹ Batafsil</a>
+    </div>
+  `;
+  document.querySelectorAll('.hero-thumb').forEach((t, i) => {
+    t.classList.toggle('active', i === index);
+  });
+}
+
+function startHeroRotation() {
+  clearInterval(heroTimer);
+  heroTimer = setInterval(() => {
+    const next = (heroIndex + 1) % Math.min(heroAnimes.length, 5);
+    setHero(heroAnimes[next], next);
+  }, 7000);
+}
+
+async function loadHero() {
+  try {
+    const data = await API.get(API.endpoints.trending());
+    heroAnimes = data.results || data || [];
+    if (!heroAnimes.length) {
+      document.getElementById('heroContent').innerHTML = `
+        <div class="hero-badge">アニメ</div>
+        <div class="hero-title">ANIMEE</div>
+        <p class="hero-desc">Katalog hozircha bo‘sh. Tez orada yangi qismlar qo‘shiladi.</p>
+        <div class="hero-actions">
+          <a href="${URLS.catalog}" class="btn-hero btn-hero-primary">Katalog</a>
+        </div>`;
+      return;
+    }
+    document.getElementById('heroThumbs').innerHTML = heroAnimes.slice(0,5).map((a,i) => `
+      <div class="hero-thumb ${i===0?'active':''}" onclick="setHero(heroAnimes[${i}],${i});startHeroRotation();">
+        <img src="${a.poster||''}" onerror="Utils.imgFallback(this)"/>
+      </div>
+    `).join('');
+    setHero(heroAnimes[0], 0);
+    startHeroRotation();
+  } catch(e) {
+    document.getElementById('heroContent').innerHTML = `
+      <div class="hero-badge">⭐ Xush kelibsiz</div>
+      <div class="hero-title">ANIMEE</div>
+      <p class="hero-desc">Hozir yuklab bo‘lmadi. Birozdan so‘ng qayta urinib ko‘ring.</p>
+      <div class="hero-actions">
+        <a href="${URLS.catalog}" class="btn-hero btn-hero-primary">▶ Katalogga o'tish</a>
+      </div>`;
+  }
+}
+
+async function loadGenres() {
+  try {
+    const genres = await API.get(API.endpoints.genres());
+    const list = genres.results || genres || [];
+    document.getElementById('genresRow').innerHTML =
+      `<span class="genre-tag active" onclick="filterByGenre(null,this)">Barchasi</span>` +
+      list.map(g => `<span class="genre-tag" onclick="filterByGenre(${g.id},this)">${g.name}</span>`).join('');
+  } catch(e) {
+    document.getElementById('genresRow').innerHTML = '';
+  }
+}
+
+function filterByGenre(id, el) {
+  document.querySelectorAll('#genresRow .genre-tag').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  loadTrending(id ? { genre: id } : {});
+}
+
+function rankClass(i) {
+  return i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+}
+
+function animeCardHTML(anime) {
+  return `
+    <div class="anime-card" onclick="window.location.href='${Utils.titleHref(anime)}'">
+      <div class="anime-card-poster">
+        <img src="${anime.poster||''}" alt="${anime.title||''}" loading="lazy" onerror="Utils.imgFallback(this)"/>
+        <div class="anime-card-overlay"><div class="play-btn-overlay">▶</div></div>
+        ${Utils.kindBadge(anime)}
+        ${anime.status==='airing' ? '<span class="anime-card-badge">Efirda</span>' : ''}
+        ${anime.rating ? `<span class="anime-card-rating">★ ${parseFloat(anime.rating).toFixed(1)}</span>` : ''}
+      </div>
+      <div class="anime-card-info">
+        <div class="anime-card-title">${anime.title_uz||anime.title||'—'}</div>
+        <div class="anime-card-meta">
+          <span>${Utils.year(anime)}</span>
+          <span class="dot"></span>
+          <span>${Utils.epLabel(anime)}</span>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function loadNewReleases() {
+  const el = document.getElementById('newReleasesRow');
+  el.innerHTML = Utils.skeleton(8).split('\n').map(() =>
+    `<div class="skeleton-card" style="min-width:min(24.375rem,100%);flex:0 0 auto;"><div class="skeleton-img skeleton-anim" style="aspect-ratio:3/4;"></div><div class="skeleton-title skeleton-anim"></div></div>`
+  ).join('');
+  try {
+    const data = await API.get(API.endpoints.newReleases());
+    const list = data.results || data || [];
+    if (!list.length) { el.innerHTML = '<p style="color:var(--text-muted)">Ma\'lumot yo\'q</p>'; return; }
+    el.classList.add('stagger');
+    el.innerHTML = list.map((anime) => animeCardHTML(anime)).join('');
+  } catch(e) {
+    el.innerHTML = `<div class="error-state"><p>Yuklab bo'lmadi</p></div>`;
+  }
+}
+
+async function loadTrending(params = {}) {
+  const el = document.getElementById('trendingGrid');
+  el.innerHTML = Utils.skeleton(8).split('\n').map(() =>
+    `<div class="skeleton-card" style="min-width:min(11.2rem,100%);flex:0 0 auto;"><div class="skeleton-img skeleton-anim" style="aspect-ratio:3/4;"></div><div class="skeleton-title skeleton-anim"></div></div>`
+  ).join('');
+  try {
+    const url = params.genre ? API.endpoints.byGenre(params.genre) : API.endpoints.trending();
+    const data = await API.get(url);
+    const list = data.results || data || [];
+    if (!list.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">🎌</div><h3>Anime topilmadi</h3></div>'; return; }
+    el.classList.add('stagger');
+    el.innerHTML = list.map((anime) => animeCardHTML(anime)).join('');
+  } catch(e) {
+    el.innerHTML = `<div class="error-state"><p>Hozir yuklab bo‘lmadi.</p></div>`;
+  }
+}
+
+async function loadTop10() {
+  const el = document.getElementById('topList');
+  try {
+    const data = await API.get(API.endpoints.trending());
+    const list = (data.results || data || []).slice(0,10);
+    if (!list.length) { el.innerHTML = '<p style="color:var(--text-muted)">Hali reyting yo‘q</p>'; return; }
+    el.innerHTML = list.map((a,i) => `
+      <div class="top-item" onclick="window.location.href='${Utils.titleHref(a)}'">
+        <div class="top-rank ${rankClass(i)}">${i+1}</div>
+        <div class="top-thumb"><img src="${a.poster||''}" onerror="Utils.imgFallback(this)"/></div>
+        <div class="top-info">
+          <div class="top-title">${a.title_uz||a.title||'—'}</div>
+          <div class="top-sub">${Utils.year(a)} • ${Utils.episodes(a)} ep</div>
+        </div>
+        ${a.rating ? `<div class="top-rating">★${parseFloat(a.rating).toFixed(1)}</div>` : ''}
+      </div>
+    `).join('');
+  } catch(e) {
+    el.innerHTML = `<div class="error-state"><p>Yuklab bo'lmadi</p></div>`;
+  }
+}
+
+loadHero();
+loadGenres();
+loadNewReleases();
+loadTrending();
+loadTop10();
+</script>
+</body>
+</html>

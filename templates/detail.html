@@ -1,0 +1,505 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Anime — Animee</title>
+  <link rel="stylesheet" href="{% static 'css/global.css' %}?v=animee120"/>
+  <style>
+    .detail-hero {
+      position: relative;
+      min-height: 82vh;
+      display: flex;
+      align-items: flex-end;
+      overflow: hidden;
+      margin-top: calc(-1 * var(--navbar-h));
+      padding-top: var(--navbar-h);
+    }
+    .detail-hero-bg {
+      position: absolute;
+      inset: 0;
+      background-size: cover;
+      background-position: center 18%;
+    }
+    .detail-hero-bg::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(to right, rgba(7,0,22,0.94) 32%, rgba(7,0,22,0.45) 68%, transparent 88%),
+        linear-gradient(to top, rgba(7,0,22,1) 0%, rgba(7,0,22,0.15) 52%);
+    }
+    .detail-hero-inner {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      display: grid;
+      grid-template-columns: 1fr 260px;
+      gap: 2.5rem;
+      align-items: end;
+      padding-bottom: 2.8rem;
+    }
+    .detail-kicker {
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+      margin-bottom: 0.9rem;
+      flex-wrap: wrap;
+    }
+    .detail-back {
+      color: var(--text-secondary);
+      font-size: 0.82rem;
+      font-weight: 600;
+    }
+    .detail-back:hover { color: var(--accent-2); }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--accent-dim);
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 4px 12px;
+      border-radius: 20px;
+    }
+    .detail-title {
+      font-family: var(--font-display);
+      font-size: clamp(2.4rem, 6vw, 4.4rem);
+      line-height: 0.95;
+      letter-spacing: 1px;
+      margin-bottom: 0.55rem;
+      text-shadow: 0 2px 24px rgba(0,0,0,0.55);
+    }
+    .detail-title-jp {
+      font-family: var(--font-jp);
+      font-size: 1rem;
+      color: var(--text-secondary);
+      letter-spacing: 0.28em;
+      margin-bottom: 1.1rem;
+    }
+    .detail-desc {
+      font-size: 0.98rem;
+      line-height: 1.75;
+      color: rgba(240,240,245,0.82);
+      max-width: 36rem;
+      margin-bottom: 1.35rem;
+    }
+    .detail-meta {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin-bottom: 1.6rem;
+    }
+    .detail-meta span, .detail-meta a {
+      font-size: 0.84rem;
+      color: var(--text-secondary);
+    }
+    .detail-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+    .btn-hero {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.78rem 1.7rem;
+      font-size: 0.95rem;
+      font-weight: 700;
+      border-radius: 999px;
+      transition: all var(--transition);
+    }
+    .btn-hero-primary {
+      background: linear-gradient(120deg, var(--accent), #7c5cff);
+      color: #fff;
+      box-shadow: 0 0 30px var(--accent-glow);
+    }
+    .btn-hero-primary:hover { filter: brightness(1.08); transform: translateY(-2px); }
+    .btn-hero-secondary {
+      background: rgba(255,255,255,0.08);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.18);
+      backdrop-filter: blur(8px);
+    }
+    .btn-hero-secondary:hover { border-color: var(--accent-2); color: var(--accent-2); }
+    .detail-poster {
+      border-radius: 1.15rem;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      box-shadow: 0 24px 60px rgba(0,0,0,0.55), 0 0 32px rgba(255, 43, 214, 0.18);
+    }
+    .detail-poster img { width: 100%; display: block; aspect-ratio: 3/4; object-fit: cover; }
+
+    .detail-body { padding-top: 2.4rem; padding-bottom: 2rem; }
+    .season-tabs {
+      display: flex;
+      gap: 0.4rem;
+      margin-bottom: 1.25rem;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .season-tabs::-webkit-scrollbar { display: none; }
+    .season-tab {
+      padding: 0.45rem 1.05rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 0.84rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all var(--transition);
+    }
+    .season-tab:hover { border-color: var(--border-hover); color: #fff; }
+    .season-tab.active {
+      background: var(--accent-dim);
+      border-color: var(--accent);
+      color: #fff;
+      box-shadow: inset 0 0 0 1px var(--accent);
+    }
+
+    .ep-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0.85rem;
+    }
+    @media (min-width: 720px) { .ep-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (min-width: 1100px) { .ep-grid { grid-template-columns: repeat(3, 1fr); } }
+    .ep-card {
+      display: grid;
+      grid-template-columns: 148px 1fr;
+      gap: 0.85rem;
+      padding: 0.55rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      cursor: pointer;
+      transition: transform var(--transition), border-color var(--transition), box-shadow var(--transition);
+    }
+    @media (hover: hover) {
+      .ep-card:hover {
+        border-color: var(--accent-2);
+        transform: translateY(-3px);
+        box-shadow: 0 12px 28px rgba(0,0,0,0.35), 0 0 18px rgba(0, 229, 255, 0.12);
+      }
+      .ep-card:hover .ep-card-play { opacity: 1; transform: scale(1); }
+      .ep-card:hover img { transform: scale(1.08); }
+    }
+    .ep-card.first { border-color: var(--accent); background: var(--accent-dim); }
+    .ep-card-thumb {
+      position: relative;
+      border-radius: 0.7rem;
+      overflow: hidden;
+      aspect-ratio: 16/10;
+    }
+    .ep-card-thumb img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      transition: transform 0.45s ease;
+    }
+    .ep-card-num {
+      position: absolute;
+      left: 0.4rem; bottom: 0.4rem;
+      background: rgba(7,0,22,0.78);
+      color: #fff;
+      font-family: var(--font-display);
+      font-size: 0.78rem;
+      font-weight: 800;
+      padding: 0.12rem 0.4rem;
+      border-radius: 999px;
+    }
+    .ep-card-play {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(7,0,22,0.35);
+      font-size: 1.1rem;
+      opacity: 0;
+      transform: scale(0.86);
+      transition: all var(--transition);
+    }
+    .ep-card-copy { display: flex; flex-direction: column; justify-content: center; min-width: 0; padding-right: 0.3rem; }
+    .ep-card-title { font-weight: 700; font-size: 0.95rem; }
+    .ep-card-sub { font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.2rem; }
+    .ep-card-start {
+      display: inline-flex;
+      margin-top: 0.45rem;
+      font-size: 0.68rem;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+
+    .fade-in { animation: fadeIn 0.5s ease forwards; }
+    @keyframes fadeIn { from { opacity:0; transform: translateY(16px); } to { opacity:1; transform: none; } }
+
+    @media (max-width: 860px) {
+      .detail-hero { min-height: 78vh; }
+      .detail-hero-inner { grid-template-columns: 1fr; padding-bottom: 2rem; }
+      .detail-poster { display: none; }
+      .detail-title { letter-spacing: 0; }
+      .ep-card { grid-template-columns: 112px 1fr; }
+      .detail-hero-bg::after {
+        background:
+          linear-gradient(to top, rgba(7,0,22,1) 0%, rgba(7,0,22,0.78) 42%, rgba(7,0,22,0.45) 100%),
+          linear-gradient(to right, rgba(7,0,22,0.82), rgba(7,0,22,0.28));
+      }
+    }
+  </style>
+</head>
+<body>
+
+{% include "partials/nav.html" with active="catalog" %}
+
+<div class="detail-hero" id="hero">
+  <div class="detail-hero-bg" id="heroBg"></div>
+  <div class="hero-speedlines"></div>
+  <div class="kanji-watermark" id="heroKanji">アニメ</div>
+  <div class="detail-hero-inner page-container" id="heroInner">
+    <div id="heroCopy">
+      <div class="spinner-wrap"><div class="spinner"></div></div>
+    </div>
+    <div id="heroPoster"></div>
+  </div>
+</div>
+
+<div class="page-container detail-body" id="detailBody"></div>
+
+<footer class="footer">
+  <div class="footer-logo">ANI<span>MEE</span></div>
+  <p>animee.uz — o‘zbek va rus tilida tomosha. © 2026</p>
+</footer>
+
+<script src="{% static 'js/api.js' %}?v=animee90"></script>
+<script>
+const URLS = {
+  index: "{% url 'index' %}",
+  detail: "{% url 'detail' %}",
+  catalog: "{% url 'catalog' %}",
+  player: "{% url 'player' %}",
+};
+window.ANIMEE_TITLE = {{ title_json|default:'{}'|safe }};
+const animeId = window.ANIMEE_TITLE.id || new URLSearchParams(window.location.search).get('id');
+if (!animeId) window.location.href = URLS.catalog;
+
+let currentSeasonId = null;
+let animeData = null;
+
+window.addEventListener('scroll', () => {
+  document.getElementById('navbar').classList.toggle('scrolled', window.scrollY > 60);
+});
+
+async function loadDetail() {
+  try {
+    const anime = await API.get(API.endpoints.animeDetail(animeId));
+    animeData = anime;
+    document.title = `${anime.title || ''} — Animee`;
+    if (anime.poster) document.getElementById('heroBg').style.backgroundImage = `url('${anime.poster}')`;
+    document.getElementById('heroKanji').textContent = 'アニメ';
+    renderHero(anime);
+    renderBody(anime);
+    loadSeasons(anime);
+    loadRelated(anime);
+  } catch (e) {
+    document.getElementById('heroCopy').innerHTML = `
+      <div class="error-state">
+        <h3>Topilmadi</h3>
+        <a href="${URLS.catalog}" class="btn-primary">Katalog</a>
+      </div>`;
+  }
+}
+
+function renderHero(a) {
+  document.getElementById('heroCopy').innerHTML = `
+    <div class="fade-in">
+      <div class="detail-kicker">
+        <a class="detail-back" href="${URLS.catalog}">← Katalog</a>
+        <span class="hero-badge">${Utils.kindLabel(a.kind)} · Original</span>
+      </div>
+      <h1 class="detail-title">${a.title || '—'}</h1>
+      <div class="detail-title-jp">${Utils.jp(a.title)}</div>
+      <p class="detail-desc">${a.description || 'Tavsif mavjud emas.'}</p>
+      <div class="detail-meta">
+        <span>📅 ${Utils.year(a)}</span>
+        <span class="dot"></span>
+        <span>🎬 ${Utils.epLabel(a)}</span>
+        <span class="dot"></span>
+        <span>${(a.kind === 'film') ? 'Film' : `${(a.seasons || []).length || 1}-mavsum`}</span>
+        ${(a.genres || []).map(g =>
+          `<a class="genre-tag" href="${URLS.catalog}?genre=${g.id}">${g.name || g}</a>`
+        ).join('')}
+      </div>
+      <div class="detail-actions">
+        <button class="btn-hero btn-hero-primary" onclick="playFirst()">▶ Ko‘rish boshlash</button>
+        <div class="list-picker" id="listPicker">
+          <button type="button" data-status="watching">Ko‘ryapman</button>
+          <button type="button" data-status="completed">Ko‘rib bo‘ldim</button>
+          <button type="button" data-status="planned">Ko‘rmoqchiman</button>
+          <button type="button" data-status="dropped">Qiziq emas</button>
+          <button type="button" data-status="favorite">Sevimli</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('heroPoster').innerHTML = a.poster
+    ? `<div class="detail-poster fade-in"><img src="${a.poster}" alt="${a.title || ''}" onerror="Utils.imgFallback(this)"/></div>`
+    : '';
+  bindListPicker(a);
+}
+
+function renderBody(a) {
+  document.getElementById('detailBody').innerHTML = `
+    <div class="section">
+      <div class="section-header">
+        <h2 class="section-title">Qismlar</h2>
+        <span class="section-link">${Utils.episodes(a)} ta</span>
+      </div>
+      <div id="seasonTabs" class="season-tabs"></div>
+      <div id="episodeList" class="ep-grid"></div>
+    </div>
+    <div class="section" id="relatedSection">
+      <div class="section-header"><h2 class="section-title">Yana shu janrda</h2></div>
+      <div class="anime-grid" id="relatedGrid"></div>
+    </div>`;
+}
+
+function loadSeasons(anime) {
+  const seasons = anime.seasons || [];
+  const tabsEl = document.getElementById('seasonTabs');
+  if (!seasons.length) {
+    tabsEl.innerHTML = '<span style="color:var(--text-muted);font-size:.85rem">Mavsum ma\'lumoti yo\'q</span>';
+    return;
+  }
+  if (anime.kind === 'film') {
+    tabsEl.innerHTML = '';
+    selectSeason(seasons[0].id, null);
+    const nxt = anime.next_title;
+    if (nxt) {
+      const related = document.getElementById('relatedSection');
+      const card = document.createElement('div');
+      card.className = 'section';
+      card.innerHTML = `
+        <div class="section-header"><h2 class="section-title">Keyingi kino</h2></div>
+        <div class="anime-grid">
+          <div class="anime-card" onclick="window.location.href='${Utils.titleHref(nxt)}'">
+            <div class="anime-card-poster">
+              <img src="${nxt.poster || ''}" alt="" onerror="Utils.imgFallback(this)"/>
+              <div class="anime-card-overlay"><div class="play-btn-overlay">▶</div></div>
+            </div>
+            <div class="anime-card-info">
+              <div class="anime-card-title">${nxt.title || '—'}</div>
+              <div class="anime-card-meta"><span>Shu film tugagach</span></div>
+            </div>
+          </div>
+        </div>`;
+      related?.parentNode?.insertBefore(card, related);
+    }
+    return;
+  }
+  tabsEl.innerHTML = seasons.map((s, i) => `
+    <button class="season-tab ${i===0?'active':''}" onclick="selectSeason(${s.id}, this)">
+      ${s.number}-mavsum
+    </button>
+  `).join('');
+  selectSeason(seasons[0].id, tabsEl.firstElementChild);
+}
+
+function selectSeason(seasonId, el) {
+  currentSeasonId = seasonId;
+  document.querySelectorAll('.season-tab').forEach(t => t.classList.remove('active'));
+  el?.classList.add('active');
+  const listEl = document.getElementById('episodeList');
+  const season = (animeData.seasons || []).find(s => s.id === seasonId);
+  const eps = season ? (season.episodes || []) : [];
+  if (!eps.length) {
+    listEl.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">🎌</div><h3>Epizod yo‘q</h3></div>';
+    return;
+  }
+  listEl.innerHTML = eps.map((ep, i) => `
+    <article class="ep-card ${i===0?'first':''}" onclick="watchEpisode(${ep.id}, this.dataset.path)" data-path="${ep.watch_path || ''}" id="ep-${ep.id}">
+      <div class="ep-card-thumb">
+        <img src="${ep.thumbnail || animeData.poster || ''}" alt="" onerror="Utils.imgFallback(this)"/>
+        <span class="ep-card-num">${String(ep.number || i + 1).padStart(2,'0')}</span>
+        <div class="ep-card-play">▶</div>
+      </div>
+      <div class="ep-card-copy">
+        <div class="ep-card-title">${ep.title || `${ep.number}-qism`}</div>
+        <div class="ep-card-sub">${animeData.title || ''} · ${Utils.year(animeData)}</div>
+        ${i===0 ? '<div class="ep-card-start">Boshlash</div>' : ''}
+      </div>
+    </article>
+  `).join('');
+}
+
+function watchEpisode(episodeId, path) {
+  window.location.href = path || Utils.watchHref({ id: episodeId, watch_path: path });
+}
+function playFirst() {
+  const first = document.querySelector('.ep-card');
+  if (!first) { Utils.toast('Avval mavsum yuklansin', 'info'); return; }
+  watchEpisode(first.id.replace('ep-', ''), first.dataset.path);
+}
+function bindListPicker(anime) {
+  const picker = document.getElementById('listPicker');
+  if (!picker) return;
+  const buttons = [...picker.querySelectorAll('button[data-status]')];
+  const mark = (status) => {
+    buttons.forEach((btn) => btn.classList.toggle('active', btn.dataset.status === status));
+  };
+  Lists.status(anime.id).then((row) => mark(row.status));
+  buttons.forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const current = buttons.find((b) => b.classList.contains('active'))?.dataset.status;
+      if (current === btn.dataset.status) {
+        await Lists.remove(anime.id);
+        mark(null);
+        return;
+      }
+      await Lists.set(anime, btn.dataset.status);
+      mark(btn.dataset.status);
+    });
+  });
+}
+
+async function loadRelated(anime) {
+  const el = document.getElementById('relatedGrid');
+  try {
+    const genreId = (anime.genres || [])[0]?.id;
+    const data = await API.get(API.endpoints.animeList());
+    const all = data.results || data || [];
+    const same = genreId
+      ? all.filter(a => String(a.id) !== String(animeId) && (a.genres || []).some(g => g.id === genreId))
+      : [];
+    const rest = all.filter(a => String(a.id) !== String(animeId) && !same.includes(a));
+    const list = [...same, ...rest].slice(0, 6);
+    if (!list.length) { document.getElementById('relatedSection')?.remove(); return; }
+    el.innerHTML = list.map(a => `
+      <div class="anime-card" onclick="window.location.href='${Utils.titleHref(a)}'">
+        <div class="anime-card-poster">
+          <img src="${a.poster||''}" loading="lazy" onerror="Utils.imgFallback(this)"/>
+          <div class="anime-card-overlay"><div class="play-btn-overlay">▶</div></div>
+          ${Utils.kindBadge(a)}
+        </div>
+        <div class="anime-card-info">
+          <div class="anime-card-title">${a.title||'—'}</div>
+          <div class="anime-card-meta">
+            <span>${Utils.year(a)}</span><span class="dot"></span>
+            <span>${Utils.epLabel(a)}</span>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    document.getElementById('relatedSection')?.remove();
+  }
+}
+
+loadDetail();
+</script>
+</body>
+</html>

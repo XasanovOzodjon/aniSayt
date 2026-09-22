@@ -207,3 +207,13 @@ marimo/_lsp/
 __marimo__/
 
 /media/
+/staticfiles/
+.DS_Store
+.agents/
+.scratch/
+Untitled/
+
+# Auth mascot R3F island
+web/
+static/models/
+static/js/vendor/
