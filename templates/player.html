@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
   <title>Ko‘rish — Animee</title>
   <link rel="stylesheet" href="{% static 'css/global.css' %}?v=animee120"/>
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
+  <script src="{% static 'js/hls.min.js' %}?v=1.5.13"></script>
   <style>
     .player-body .sakura { display: none; }
     .watch-page {
@@ -822,20 +822,19 @@ function markPlaying(on) {
 
 function initHLS(url) {
   if (hls) { hls.destroy(); hls = null; }
-  if (Hls.isSupported() && url.includes('.m3u8')) {
+  if (typeof Hls !== 'undefined' && Hls.isSupported() && url.includes('.m3u8')) {
     hls = new Hls({
-      enableWorker: true,
+      enableWorker: false,
       lowLatencyMode: false,
+      startPosition: resumeAt >= 5 ? resumeAt : -1,
       backBufferLength: 30,
-      maxBufferLength: 10,
-      maxMaxBufferLength: 18,
-      maxBufferSize: 20 * 1000 * 1000,
-      maxBufferHole: 0.4,
+      maxBufferLength: 30,
+      maxMaxBufferLength: 60,
+      maxBufferSize: 40 * 1000 * 1000,
+      maxBufferHole: 0.8,
       startFragPrefetch: true,
-      maxLoadingDelay: 2,
-      maxStarvationDelay: 2,
-      fragLoadingMaxRetry: 4,
-      manifestLoadingMaxRetry: 3,
+      fragLoadingMaxRetry: 6,
+      manifestLoadingMaxRetry: 4,
       capLevelToPlayerSize: true,
     });
     hls.loadSource(url);
@@ -870,6 +869,7 @@ function setQuality(level, el) {
   toggleQuality();
 }
 video.addEventListener('waiting', () => {
+  if (!started) return;
   document.getElementById('playerLoading').style.display = 'flex';
   if (window.PartyRoom?.active) PartyRoom.noteBuffer(true);
 });
@@ -943,6 +943,10 @@ function markResumed(pos) {
 
 function trySeekResume() {
   if (resumeApplied || window.PartyRoom?.active) return;
+  if (started && !video.paused) {
+    markResumed(video.currentTime || resumeAt);
+    return;
+  }
   const t = resumeAt;
   const dur = video.duration;
   if (!t || t < 5) return;
@@ -1021,20 +1025,14 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('pagehide', () => persistProgress(true));
 function startPlayback() {
-  trySeekResume();
-  const play = () => video.play().catch(() => markPlaying(false));
-  if (resumeAt >= 5 && !resumeApplied && Math.abs((video.currentTime || 0) - resumeAt) > 1.5) {
-    let launched = false;
-    const done = () => {
-      if (launched) return;
-      launched = true;
-      video.removeEventListener('seeked', done);
-      play();
-    };
-    video.addEventListener('seeked', done);
-    setTimeout(done, 900);
-    return;
-  }
+  document.getElementById('playerLoading').style.display = 'flex';
+  const play = () => video.play().then(() => {
+    markPlaying(true);
+    if (resumeAt >= 5 && !resumeApplied) markResumed(video.currentTime || resumeAt);
+  }).catch(() => {
+    document.getElementById('playerLoading').style.display = 'none';
+    markPlaying(false);
+  });
   play();
 }
 function togglePlay() {
