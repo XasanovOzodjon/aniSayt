@@ -35,7 +35,9 @@ class Video(models.Model):
     language = models.CharField(max_length=50)
     translated_by = models.CharField(max_length=120, blank=True)
     video = models.FileField(upload_to="episodes/videos/", blank=True, null=True)
+    source_url = models.CharField(max_length=1000, blank=True)
     hls_path = models.CharField(max_length=255, blank=True)
+    ingest_error = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

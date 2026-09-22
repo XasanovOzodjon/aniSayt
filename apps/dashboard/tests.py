@@ -148,7 +148,7 @@ class DashboardApiTests(TestCase):
         }, format='json')
         eid2 = ep2.json()['episodes'][1]['id']
 
-        def fake_download(url):
+        def fake_download(url, on_progress=None):
             from tempfile import NamedTemporaryFile
             tmp = NamedTemporaryFile(delete=False, suffix='.mp4')
             tmp.write(b'1' * 2048)
@@ -160,12 +160,47 @@ class DashboardApiTests(TestCase):
         ):
             remote = self.client.post(
                 f'/uz/api/dashboard/episodes/{eid2}/videos/',
-                {'language': 'uz', 'source_url': 'https://cdn.example.com/net.mp4'},
+                {'language': 'uz', 'source_url': 'https://example.com/net.mp4'},
                 format='json',
             )
         self.assertEqual(remote.status_code, 201, remote.content)
         after2 = self.client.get(f'/uz/api/dashboard/seasons/{sid}/')
         self.assertTrue(after2.json()['episodes'][1]['videos'][0]['hls_path'])
+        self.assertEqual(after2.json()['episodes'][1]['videos'][0]['status'], 'ready')
+        self.assertEqual(after2.json()['episodes'][1]['videos'][0]['progress'], 100)
+
+    def test_source_url_queues_without_waiting(self):
+        gif = _tiny_gif()
+        res = self.client.post('/uz/api/dashboard/catalog/', {
+            'title': 'Clip',
+            'description': 'Tavsif',
+            'kind': 'drama',
+            'poster': gif,
+        }, format='multipart')
+        season = self.client.post(f'/uz/api/dashboard/catalog/{res.json()["id"]}/seasons/', {
+            'number': 1, 'release_date': 2026,
+        }, format='json')
+        sid = season.json()['id']
+        ep = self.client.post(f'/uz/api/dashboard/seasons/{sid}/episodes/', {
+            'number': 1, 'title': '1-qism',
+        }, format='json')
+        eid = ep.json()['episodes'][0]['id']
+        with patch('apps.dashboard.services.settings.TESTING', False), patch(
+            'apps.episode.signals.settings.TESTING', False
+        ), patch('apps.episode.signals.threading.Thread') as thread:
+            with self.captureOnCommitCallbacks(execute=True):
+                remote = self.client.post(
+                    f'/uz/api/dashboard/episodes/{eid}/videos/',
+                    {'language': 'uz', 'source_url': 'https://example.com/film.mp4'},
+                    format='json',
+                )
+        self.assertEqual(remote.status_code, 201, remote.content)
+        row = self.client.get(f'/uz/api/dashboard/seasons/{sid}/').json()['episodes'][0]['videos'][0]
+        self.assertEqual(row['status'], 'queued')
+        self.assertEqual(row['source_url'], 'https://example.com/film.mp4')
+        self.assertFalse(row['hls_path'])
+        self.assertEqual(row['progress'], 0)
+        thread.assert_called()
 
     def test_broadcast_and_roles(self):
         res = self.client.post('/uz/api/dashboard/notices/', {
@@ -308,6 +343,19 @@ class IngestUrlTests(TestCase):
             validate_source_url('http://127.0.0.1/video.mp4')
         with self.assertRaises(IngestError):
             validate_source_url('ftp://files.example.com/a.mp4')
+        self.assertEqual(
+            validate_source_url('https://example.com/tarjima_kinolar/sinister_720.mp4'),
+            'https://example.com/tarjima_kinolar/sinister_720.mp4',
+        )
+
+
+class IngestProgressTests(TestCase):
+    def test_progress_roundtrip(self):
+        from apps.episode.ingest import get_progress, set_progress
+        self.assertEqual(get_progress(99), {})
+        set_progress(99, 40, 's3')
+        self.assertEqual(get_progress(99)['progress'], 40)
+        self.assertEqual(get_progress(99)['stage'], 's3')
 
 
 class ProfileReportDashTests(TestCase):

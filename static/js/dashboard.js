@@ -2,6 +2,7 @@ const root = document.getElementById('dashRoot');
 const urls = ANIMEE_URLS;
 let genresCache = [];
 let meFlags = { is_admin: false, is_moderator: false };
+let videoPollTimer = 0;
 
 const KINDS = [
   { id: 'anime', hash: 'anime', label: 'Anime', plural: 'Animelar' },
@@ -285,9 +286,40 @@ async function renderNew(kind) {
 }
 
 function videoReady(v) {
-  if (v.hls_path) return v.hls_path.includes('.m3u8') ? 'HLS tayyor' : 'Video tayyor';
-  if (v.has_file) return 'Qayta ishlanmoqda';
+  if (v.ingest_error || v.status === 'error') {
+    return `Xato: ${v.ingest_error || 'yuklanmadi'}`;
+  }
+  if (v.hls_path) return v.hls_path.includes('.m3u8') ? 'Tayyor · HLS' : 'Tayyor';
+  const pct = Number(v.progress) || 0;
+  if (v.status === 'processing' || v.has_file) return `${pct}% · HLS qilinmoqda`;
+  if (v.status === 'queued' || v.source_url) return `${pct}% · S3 ga yozilmoqda`;
   return 'Video yo‘q';
+}
+
+function videosBusy(videos) {
+  return (videos || []).some((v) => v.status === 'queued' || v.status === 'processing');
+}
+
+function watchVideos(videos) {
+  clearTimeout(videoPollTimer);
+  if (videosBusy(videos)) {
+    videoPollTimer = setTimeout(() => render(), 1500);
+  }
+}
+
+function meterHTML(pct, label) {
+  const n = Math.max(0, Math.min(100, Number(pct) || 0));
+  return `<div class="dash-meter" role="progressbar" aria-valuenow="${n}" aria-valuemin="0" aria-valuemax="100">
+    <div class="dash-meter-fill" style="width:${n}%"></div>
+    <span>${n}%${label ? ` · ${esc(label)}` : ''}</span>
+  </div>`;
+}
+
+function setFormMeter(form, pct, label) {
+  const wrap = form.querySelector('[data-meter]');
+  if (!wrap) return;
+  wrap.hidden = false;
+  wrap.innerHTML = meterHTML(pct, label);
 }
 
 function videoFormHTML(episodeId) {
@@ -299,7 +331,8 @@ function videoFormHTML(episodeId) {
       </div>
       <label>Video fayl <input type="file" name="video" accept="video/*"/></label>
       <label>Yoki internetdagi video havolasi <input name="source_url" placeholder="https://…/video.mp4"/></label>
-      <p class="settings-hint">HLS yozilmaydi. Fayl yoki havola — tizim o‘zi olib, HLS qiladi. Bir nechta til = tarjimalar.</p>
+      <div data-meter hidden></div>
+      <p class="settings-hint">Fayl yoki havola to‘g‘ridan-to‘g‘ri S3 ga yoziladi. Pastdagi chiziq to‘lguncha foiz ko‘rinadi, keyin HLS fonda tayyorlanadi.</p>
       <button class="btn-primary" type="submit">Videoni yuklash</button>
     </form>`;
 }
@@ -320,12 +353,35 @@ function bindVideoForms() {
       body.set('translated_by', fd.get('translated_by') || '');
       if (file && file.size) body.set('video', file);
       if (url) body.set('source_url', url);
+      const btn = form.querySelector('button[type="submit"]');
       try {
-        Utils.toast('Yuklanmoqda…', 'info');
-        await API.upload(API.endpoints.dashVideos(form.dataset.video), body);
-        Utils.toast('Video qo‘yildi', 'success');
+        if (btn) {
+          btn.disabled = true;
+          btn.textContent = 'Yuklanmoqda…';
+        }
+        setFormMeter(form, 1, file && file.size ? 'S3 ga yozilmoqda' : 'Qabul qilindi');
+        if (file && file.size) {
+          await API.uploadWithProgress(
+            API.endpoints.dashVideos(form.dataset.video),
+            body,
+            (pct) => {
+              setFormMeter(form, pct, 'S3 ga yozilmoqda');
+              if (btn) btn.textContent = `${pct}%`;
+            },
+          );
+        } else {
+          await API.upload(API.endpoints.dashVideos(form.dataset.video), body);
+        }
+        setFormMeter(form, 100, 'Qabul qilindi');
+        Utils.toast('Video S3 ga ketdi — holat pastda yangilanadi', 'success');
         render();
-      } catch (ex) { err(ex); }
+      } catch (ex) {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = 'Videoni yuklash';
+        }
+        err(ex);
+      }
     });
   });
   root.querySelectorAll('[data-del-video]').forEach((btn) => {
@@ -337,10 +393,18 @@ function bindVideoForms() {
 }
 
 function videosHTML(videos) {
-  return (videos || []).map((v) => `
-    <div class="settings-hint" style="margin:.25rem 0">${esc(v.language)} · ${videoReady(v)}
-      <button type="button" class="btn-secondary" data-del-video="${v.id}">O‘chirish</button>
-    </div>`).join('') || '<p class="settings-hint">Hali Master yo‘q</p>';
+  watchVideos(videos);
+  return (videos || []).map((v) => {
+    const busy = v.status === 'queued' || v.status === 'processing';
+    return `
+    <div class="dash-video-row">
+      <div class="settings-hint" style="margin:.2rem 0">
+        <strong>${esc(v.language || 'uz')}</strong> · ${esc(videoReady(v))}
+        <button type="button" class="btn-secondary" data-del-video="${v.id}">O‘chirish</button>
+      </div>
+      ${busy || v.hls_path ? meterHTML(v.hls_path ? 100 : v.progress, v.hls_path ? 'Tayyor' : '') : ''}
+    </div>`;
+  }).join('') || '<p class="settings-hint">Hali video yo‘q. Havola yoki fayl qo‘ying.</p>';
 }
 
 async function renderTitle(id) {

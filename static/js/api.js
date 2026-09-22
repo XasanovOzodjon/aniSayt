@@ -159,6 +159,34 @@ const API = {
     return data;
   },
 
+  async uploadWithProgress(url, formData, onProgress) {
+    const send = async (force) => {
+      if (force && typeof Auth !== 'undefined') await Auth.ensureAccess(true);
+      const headers = await this._headers(false);
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', url);
+        Object.keys(headers).forEach((key) => xhr.setRequestHeader(key, headers[key]));
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable && onProgress) {
+            onProgress(Math.round((event.loaded / event.total) * 100));
+          }
+        };
+        xhr.onload = () => {
+          let payload = {};
+          try { payload = JSON.parse(xhr.responseText || '{}'); } catch { payload = {}; }
+          resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, data: payload });
+        };
+        xhr.onerror = () => reject(new Error('Tarmoq xatosi'));
+        xhr.send(formData);
+      });
+    };
+    let res = await send(false);
+    if (res.status === 401) res = await send(true);
+    if (!res.ok) this._fail({ status: res.status }, res.data || {});
+    return res.data;
+  },
+
   // Paginated list
   async getAnimeList(params = {}) {
     const query = new URLSearchParams(params).toString();

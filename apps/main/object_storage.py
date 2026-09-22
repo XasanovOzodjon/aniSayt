@@ -66,6 +66,104 @@ def signed_url(key: str, expires=None) -> str:
     )
 
 
+def master_key(filename: str) -> str:
+    import os
+    import uuid
+
+    base = os.path.basename(filename or 'video.mp4') or 'video.mp4'
+    base = base.replace(' ', '-')[:80]
+    return f'episodes/videos/{uuid.uuid4().hex}_{base}'
+
+
+def _iter_chunks(source, chunk=1024 * 1024):
+    if hasattr(source, 'chunks'):
+        yield from source.chunks(chunk)
+        return
+    read = getattr(source, 'read', None)
+    if not read:
+        raise TypeError('stream has no read')
+    while True:
+        data = read(chunk)
+        if not data:
+            break
+        yield data
+
+
+def upload_fileobj(source, key, content_type='', size=None, on_progress=None):
+    """Stream a file-like object straight to S3. No full local copy."""
+    client = _client()
+    bucket = bucket_name()
+    extra = {
+        'ContentType': content_type or 'video/mp4',
+        'CacheControl': 'public, max-age=86400',
+    }
+    min_part = 8 * 1024 * 1024
+    buf = bytearray()
+    sent = 0
+    total = int(size or 0)
+    chunks = _iter_chunks(source)
+
+    def ping():
+        if on_progress:
+            on_progress(sent, total or sent)
+
+    for piece in chunks:
+        buf.extend(piece)
+        if len(buf) >= min_part:
+            break
+    else:
+        body = bytes(buf)
+        client.put_object(Bucket=bucket, Key=key, Body=body, **extra)
+        sent = len(body)
+        ping()
+        return key
+
+    mpu = client.create_multipart_upload(Bucket=bucket, Key=key, **extra)
+    upload_id = mpu['UploadId']
+    parts = []
+    part_no = 1
+    try:
+        def flush(force=False):
+            nonlocal buf, part_no, sent
+            while buf and (force or len(buf) >= min_part):
+                take = len(buf) if force else min_part
+                if not force:
+                    take = min(take, len(buf))
+                    if take < min_part:
+                        break
+                body = bytes(buf[:take])
+                del buf[:take]
+                resp = client.upload_part(
+                    Bucket=bucket,
+                    Key=key,
+                    PartNumber=part_no,
+                    UploadId=upload_id,
+                    Body=body,
+                )
+                parts.append({'ETag': resp['ETag'], 'PartNumber': part_no})
+                part_no += 1
+                sent += len(body)
+                ping()
+                if force:
+                    break
+
+        flush(force=True)
+        for piece in chunks:
+            buf.extend(piece)
+            flush(force=False)
+        flush(force=True)
+        client.complete_multipart_upload(
+            Bucket=bucket,
+            Key=key,
+            UploadId=upload_id,
+            MultipartUpload={'Parts': parts},
+        )
+    except Exception:
+        client.abort_multipart_upload(Bucket=bucket, Key=key, UploadId=upload_id)
+        raise
+    return key
+
+
 def upload_file(local_path: str, key: str, content_type=''):
     extra = {}
     if content_type:

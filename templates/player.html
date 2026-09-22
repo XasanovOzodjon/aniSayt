@@ -1342,14 +1342,17 @@ function applyEmpty(ep) {
   const emptyEl = document.getElementById('playerEmpty');
   document.getElementById('playerLoading').style.display = 'none';
   emptyEl.classList.remove('hidden');
-  posterEl.classList.add('hidden');
+  posterEl.classList.remove('hidden');
+  setPoster(ep.anime_poster);
   ageBadge.classList.add('hidden');
   document.getElementById('bigPlay').classList.add('hidden');
-  if (ep.anime_poster) {
-    emptyEl.style.backgroundImage = `linear-gradient(to top, rgba(5,0,16,0.92), rgba(5,0,16,0.3)), url('${ep.anime_poster}')`;
-    emptyEl.style.backgroundSize = 'cover';
-    emptyEl.style.backgroundPosition = 'center';
-  }
+  const pending = (ep.videos || []).some((v) => !v.hls_path && !v.url);
+  const title = emptyEl.querySelector('h3');
+  const body = emptyEl.querySelector('p');
+  if (title) title.textContent = pending ? 'Video tayyorlanmoqda' : 'Video hali yuklanmagan';
+  if (body) body.textContent = pending
+    ? 'Bir necha daqiqa kuting, keyin sahifani yangilang.'
+    : 'Bu qism tez orada ochiladi.';
 }
 
 async function loadEpisode(epId, opts = {}) {

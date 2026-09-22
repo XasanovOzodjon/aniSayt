@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Count, Q
 from django.utils import timezone
@@ -5,7 +6,7 @@ from django.utils.text import slugify
 
 from apps.anime.models import Anime, Genre, Season
 from apps.anime.paths import title_path, watch_path
-from apps.episode.ingest import IngestError, attach_file
+from apps.episode.ingest import IngestError, attach_file, get_progress, validate_source_url
 from apps.episode.models import Episode, Video
 from apps.party.models import WatchParty
 from apps.person.models import Person
@@ -164,23 +165,40 @@ def season_row(season, request=None):
     }
 
 
+def video_payload(video):
+    if video.ingest_error:
+        status = 'error'
+    elif video.hls_path:
+        status = 'ready'
+    elif video.video:
+        status = 'processing'
+    elif video.source_url:
+        status = 'queued'
+    else:
+        status = 'empty'
+    info = get_progress(video.pk)
+    progress = 100 if video.hls_path else int(info.get('progress') or 0)
+    return {
+        'id': video.id,
+        'language': video.language,
+        'translated_by': video.translated_by,
+        'hls_path': video.hls_path,
+        'url': video.hls_path,
+        'has_file': bool(video.video),
+        'source_url': video.source_url,
+        'ingest_error': video.ingest_error,
+        'status': status,
+        'progress': progress,
+    }
+
+
 def episode_row(episode, request=None):
     return {
         'id': episode.id,
         'number': episode.number,
         'title': episode.title,
         'thumbnail': media_url(episode.thumbnail, request),
-        'videos': [
-            {
-                'id': video.id,
-                'language': video.language,
-                'translated_by': video.translated_by,
-                'hls_path': video.hls_path,
-                'url': video.hls_path,
-                'has_file': bool(video.video),
-            }
-            for video in episode.videos.all()
-        ],
+        'videos': [video_payload(video) for video in episode.videos.all()],
     }
 
 
@@ -546,7 +564,15 @@ def add_video(episode_id, data, files=None, request=None):
         translated_by=(data.get('translated_by') or '').strip()[:120],
     )
     try:
-        attach_file(video, uploaded=uploaded, source_url=source_url)
+        if uploaded:
+            attach_file(video, uploaded=uploaded, source_url='')
+        elif source_url:
+            validate_source_url(source_url)
+            video.source_url = source_url
+            if settings.TESTING:
+                attach_file(video, source_url=source_url)
+        else:
+            raise IngestError('Video fayl yoki internetdagi video havolasi kerak')
     except IngestError as exc:
         raise DashError(exc.message) from exc
     video.save()

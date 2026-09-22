@@ -10,14 +10,18 @@ from urllib.parse import urlparse
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from django.conf import settings
+from django.core.cache import cache
 from django.core.files import File
 
 from apps.main import object_storage as store
 
 MAX_DOWNLOAD_BYTES = 4 * 1024 * 1024 * 1024
 CHUNK = 1024 * 1024
-TIMEOUT = 180
-USER_AGENT = 'Animee/1.0'
+TIMEOUT = 1200
+USER_AGENT = (
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
+    'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+)
 
 
 class IngestError(ValueError):
@@ -77,21 +81,65 @@ def filename_from_url(url: str) -> str:
     return name
 
 
-def download_source(url: str) -> tuple[str, str]:
+PROGRESS_TTL = 6 * 3600
+
+
+def set_progress(pk, pct, stage=''):
+    if not pk:
+        return
+    cache.set(
+        f'video-progress:{pk}',
+        {'progress': int(max(0, min(100, pct))), 'stage': stage or ''},
+        PROGRESS_TTL,
+    )
+
+
+def get_progress(pk):
+    if not pk:
+        return {}
+    data = cache.get(f'video-progress:{pk}')
+    return data if isinstance(data, dict) else {}
+
+
+def _bind_key(video, key):
+    video.video.name = key
+
+
+def download_source(url: str, on_progress=None) -> tuple[str, str]:
     url = validate_source_url(url)
     name = filename_from_url(url)
-    request = Request(url, headers={'User-Agent': USER_AGENT})
+    parsed = urlparse(url)
+    request = Request(url, headers={
+        'User-Agent': USER_AGENT,
+        'Referer': f'{parsed.scheme}://{parsed.hostname}/',
+        'Accept': '*/*',
+    })
     opener = build_opener(_SafeRedirect)
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(name)[1] or '.mp4')
-    written = 0
     try:
-        with opener.open(request, timeout=TIMEOUT) as resp, open(tmp.name, 'wb') as out:
-            length = resp.headers.get('Content-Length')
-            if length and int(length) > MAX_DOWNLOAD_BYTES:
-                raise IngestError('Video juda katta')
-            ctype = (resp.headers.get('Content-Type') or '').lower()
-            if 'mpegurl' in ctype or 'x-mpegurl' in ctype:
-                raise IngestError('HLS havolasini yozmang. Video fayl yoki video havolasini yuboring')
+        resp = opener.open(request, timeout=TIMEOUT)
+    except Exception as exc:
+        raise IngestError('Videoni yuklab bo‘lmadi') from exc
+    try:
+        length = resp.headers.get('Content-Length')
+        total = int(length) if length else 0
+        if total > MAX_DOWNLOAD_BYTES:
+            raise IngestError('Video juda katta')
+        ctype = (resp.headers.get('Content-Type') or '').lower()
+        if 'mpegurl' in ctype or 'x-mpegurl' in ctype:
+            raise IngestError('HLS havolasini yozmang. Video fayl yoki video havolasini yuboring')
+        if store.s3_enabled():
+            key = store.master_key(name)
+            store.upload_fileobj(
+                resp,
+                key,
+                content_type='video/mp4',
+                size=total or None,
+                on_progress=on_progress,
+            )
+            return key, name
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(name)[1] or '.mp4')
+        written = 0
+        with open(tmp.name, 'wb') as out:
             while True:
                 chunk = resp.read(CHUNK)
                 if not chunk:
@@ -100,27 +148,46 @@ def download_source(url: str) -> tuple[str, str]:
                 if written > MAX_DOWNLOAD_BYTES:
                     raise IngestError('Video juda katta')
                 out.write(chunk)
+                if on_progress:
+                    on_progress(written, total or written)
+        if written < 1024:
+            os.unlink(tmp.name)
+            raise IngestError('Havolada video topilmadi')
+        return tmp.name, name
     except IngestError:
-        os.unlink(tmp.name)
         raise
     except Exception as exc:
-        os.unlink(tmp.name)
         raise IngestError('Videoni yuklab bo‘lmadi') from exc
-    if written < 1024:
-        os.unlink(tmp.name)
-        raise IngestError('Havolada video topilmadi')
-    return tmp.name, name
+    finally:
+        try:
+            resp.close()
+        except Exception:
+            pass
 
 
-def attach_file(video, uploaded=None, source_url=''):
+def attach_file(video, uploaded=None, source_url='', on_progress=None):
     if uploaded:
         name = getattr(uploaded, 'name', '') or ''
         if name.lower().endswith(('.m3u8', '.m3u')):
             raise IngestError('HLS fayl emas — video yuklang')
+        if store.s3_enabled():
+            key = store.master_key(name)
+            store.upload_fileobj(
+                uploaded,
+                key,
+                content_type=getattr(uploaded, 'content_type', '') or 'video/mp4',
+                size=getattr(uploaded, 'size', None),
+                on_progress=on_progress,
+            )
+            _bind_key(video, key)
+            return
         video.video = uploaded
         return
     if source_url:
-        path, name = download_source(source_url)
+        path, name = download_source(source_url, on_progress=on_progress)
+        if store.s3_enabled():
+            _bind_key(video, path)
+            return
         try:
             with open(path, 'rb') as fh:
                 video.video.save(name, File(fh), save=False)
@@ -180,8 +247,9 @@ def convert_to_hls(instance):
         try:
             output_file = os.path.join(output_dir, 'master.m3u8')
             cmd = [
-                'ffmpeg', '-y', '-i', video_path,
+                'ffmpeg', '-y', '-threads', '1', '-i', video_path,
                 '-preset', 'veryfast',
+                '-threads', '1',
                 '-g', '48',
                 '-keyint_min', '48',
                 '-sc_threshold', '0',
@@ -216,3 +284,38 @@ def convert_to_hls(instance):
             instance.save(update_fields=['hls_path'])
         finally:
             shutil.rmtree(output_dir, ignore_errors=True)
+
+
+def ingest_video(pk):
+    from .models import Video
+
+    video = Video.objects.filter(pk=pk).first()
+    if not video:
+        return
+
+    def on_progress(done, total):
+        if total:
+            set_progress(pk, 1 + int((done / total) * 84), 's3')
+        else:
+            set_progress(pk, min(85, 1 + done // (4 * 1024 * 1024)), 's3')
+
+    try:
+        set_progress(pk, 1, 'start')
+        if video.source_url and not video.video:
+            attach_file(video, source_url=video.source_url, on_progress=on_progress)
+            video.ingest_error = ''
+            video.save(update_fields=['video', 'ingest_error'])
+        if video.video:
+            set_progress(pk, 90, 'hls')
+            convert_to_hls(video)
+            Video.objects.filter(pk=pk).update(ingest_error='')
+            set_progress(pk, 100, 'ready')
+        else:
+            Video.objects.filter(pk=pk).update(ingest_error='Video fayl topilmadi')
+            set_progress(pk, 0, 'error')
+    except IngestError as exc:
+        Video.objects.filter(pk=pk).update(ingest_error=exc.message[:255])
+        set_progress(pk, 0, 'error')
+    except Exception:
+        Video.objects.filter(pk=pk).update(ingest_error='Videoni yuklab bo‘lmadi')
+        set_progress(pk, 0, 'error')

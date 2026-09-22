@@ -104,6 +104,13 @@ if REDIS_URL:
             },
         },
     }
+    if not TESTING:
+        CACHES = {
+            'default': {
+                'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+                'LOCATION': REDIS_URL,
+            }
+        }
 else:
     CHANNEL_LAYERS = {
         'default': {
