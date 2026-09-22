@@ -187,7 +187,7 @@ class DashboardApiTests(TestCase):
         eid = ep.json()['episodes'][0]['id']
         with patch('apps.dashboard.services.settings.TESTING', False), patch(
             'apps.episode.signals.settings.TESTING', False
-        ), patch('apps.episode.signals.threading.Thread') as thread:
+        ), patch('apps.episode.signals._spawn_ingest') as spawn:
             with self.captureOnCommitCallbacks(execute=True):
                 remote = self.client.post(
                     f'/uz/api/dashboard/episodes/{eid}/videos/',
@@ -200,7 +200,7 @@ class DashboardApiTests(TestCase):
         self.assertEqual(row['source_url'], 'https://example.com/film.mp4')
         self.assertFalse(row['hls_path'])
         self.assertEqual(row['progress'], 0)
-        thread.assert_called()
+        spawn.assert_called()
 
     def test_broadcast_and_roles(self):
         res = self.client.post('/uz/api/dashboard/notices/', {

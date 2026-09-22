@@ -97,6 +97,13 @@ function err(ex) {
   Utils.toast(ex.payload?.message || ex.message || 'Xato', 'error');
 }
 
+function isTransient(ex) {
+  const s = Number(ex && ex.status);
+  const msg = String((ex && ex.message) || '');
+  return s === 0 || s === 502 || s === 503 || s === 504
+    || /Failed to fetch|NetworkError|HTTP 502|HTTP 503|HTTP 504/i.test(msg);
+}
+
 async function render() {
   const user = Auth.user();
   if (!user) { gate('auth'); return; }
@@ -143,8 +150,16 @@ async function render() {
     } else if (page === 'poster') {
       if (!isAdmin()) { go('#/home'); return; }
       await renderPlayerPoster();
-    } else await renderHome();
+    }     else await renderHome();
   } catch (ex) {
+    if (isTransient(ex)) {
+      if (!root.querySelector('.dash-head') && !root.querySelector('.dash-panel')) {
+        root.innerHTML = shell(page, '<p class="settings-hint">Server javob bermoqda. Bir zumda qayta uriniladi…</p>');
+      }
+      clearTimeout(videoPollTimer);
+      videoPollTimer = setTimeout(() => render(), 2000);
+      return;
+    }
     err(ex);
     root.innerHTML = shell(page, `<p class="error-state">${esc(ex.message)}</p>`);
   }
