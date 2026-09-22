@@ -1,0 +1,15 @@
+[Unit]
+Description=Animee Telegram bot
+After=network.target animee.service
+
+[Service]
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/animee
+EnvironmentFile=/opt/animee/.env
+ExecStart=/opt/animee/.venv/bin/python /opt/animee/other/telegrambot.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
