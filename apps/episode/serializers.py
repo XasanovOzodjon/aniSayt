@@ -39,6 +39,7 @@ class EpisodeSerializer(serializers.ModelSerializer):
     age_rating = serializers.CharField(source="season.anime.age_rating", read_only=True)
     anime_slug = serializers.CharField(source="season.anime.slug", read_only=True)
     season_number = serializers.IntegerField(source="season.number", read_only=True)
+    thumbnail = serializers.SerializerMethodField()
     hls_url = serializers.SerializerMethodField()
     video_url = serializers.SerializerMethodField()
     watch_path = serializers.SerializerMethodField()
@@ -65,6 +66,15 @@ class EpisodeSerializer(serializers.ModelSerializer):
             "watch_path",
             "next_watch_path",
         ]
+
+    def _abs(self, url):
+        request = self.context.get('request')
+        if url and request:
+            return request.build_absolute_uri(url)
+        return url
+
+    def get_thumbnail(self, obj):
+        return self._abs(_file_url(obj.thumbnail) or _file_url(obj.season.anime.poster))
 
     def _first_video(self, obj):
         videos = list(obj.videos.all())

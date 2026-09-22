@@ -333,6 +333,12 @@ class DashboardApiTests(TestCase):
         episode = self.client.get(f'/uz/api/episodes/{ep_id}/')
         self.assertEqual(episode.status_code, 200)
         self.assertTrue(episode.json()['next_watch_path'])
+        listed = self.client.get('/uz/api/episodes/', {'season': film_season})
+        self.assertEqual(listed.status_code, 200)
+        payload = listed.json()
+        row = payload[0] if isinstance(payload, list) else payload['results'][0]
+        self.assertTrue(row['thumbnail'])
+        self.assertEqual(row['thumbnail'], row['anime_poster'])
 
 
 class IngestUrlTests(TestCase):

@@ -1434,7 +1434,7 @@ async function loadSidebarEpisodes(seasonId, currentId) {
       <div class="sidebar-ep-item ${i===currentEpIndex?'active':''}" onclick="switchEpisode(${i})">
         <div class="sidebar-ep-idx">${String(ep.number||i+1).padStart(2,'0')}</div>
         <div class="sidebar-ep-thumb">
-          <img src="${ep.thumbnail||''}" onerror="Utils.imgFallback(this)"/>
+          <img src="${ep.thumbnail || ep.anime_poster || ''}" alt="" onerror="Utils.imgFallback(this)"/>
           <span class="sidebar-ep-num">${ep.number||i+1}</span>
         </div>
         <div>
