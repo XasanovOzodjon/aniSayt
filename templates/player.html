@@ -4,6 +4,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  {% include "partials/favicon.html" %}
   <title>Ko‘rish — Animee</title>
   <link rel="stylesheet" href="{% static 'css/global.css' %}?v=animee120"/>
   <script src="{% static 'js/hls.min.js' %}?v=1.5.13"></script>
@@ -437,37 +438,27 @@
     .party-host-opts label { display: flex; align-items: center; gap: 0.4rem; cursor: pointer; }
     .party-faces {
       position: absolute; z-index: 12; pointer-events: none;
-      display: none; gap: 8px;
+      display: none; gap: 6px;
       grid-template-columns: repeat(var(--party-cols, 1), minmax(0, 1fr));
-      grid-template-rows: repeat(var(--party-rows, 1), minmax(0, 1fr));
+      align-content: start;
     }
     .party-faces.is-on {
       display: grid;
-      align-items: stretch;
-      justify-items: stretch;
-      right: 10px; top: 58px; bottom: 86px;
-      width: min(44%, 400px);
-    }
-    .party-faces[data-count="2"] {
-      left: 10px; right: 10px; width: auto; top: auto;
-      height: min(48%, 300px);
-    }
-    .party-faces[data-count="3"],
-    .party-faces[data-count="4"] {
-      left: 10px; right: 10px; width: auto; top: auto;
-      height: min(56%, 380px);
+      right: 8px; top: 52px; bottom: 72px;
+      width: 104px;
+      height: auto;
+      max-height: calc(100% - 124px);
     }
     .party-faces[data-count="5"],
     .party-faces[data-count="6"],
     .party-faces[data-count="7"],
     .party-faces[data-count="8"] {
-      left: 10px; right: 10px; width: auto; top: auto;
-      height: min(60%, 420px);
+      width: 196px;
     }
     .party-tile {
-      min-width: 0; min-height: 0; width: 100%; height: 100%;
-      align-self: stretch; justify-self: stretch;
-      border-radius: 14px; overflow: hidden;
+      min-width: 0; width: 100%;
+      aspect-ratio: 1; height: auto;
+      border-radius: 12px; overflow: hidden;
       position: relative; background: #160824 center / cover no-repeat;
       border: 2px solid rgba(255,255,255,0.18);
       pointer-events: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.45);
@@ -482,6 +473,7 @@
       position: absolute; inset: 0;
       width: 100%; height: 100%; object-fit: cover; display: block; background: #0b0314;
     }
+    .party-tile.is-local video { transform: scaleX(-1); }
     .party-tile-bar {
       position: absolute; left: 0; right: 0; bottom: 0;
       display: flex; align-items: center; gap: 6px;
@@ -503,7 +495,7 @@
     }
     .party-tile-mute svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
     .party-tile-vol {
-      width: 72px; height: 4px; accent-color: #ff4de8; cursor: pointer;
+      display: none;
     }
     .party-live {
       position: absolute; left: 12px; top: calc(12px + env(safe-area-inset-top)); z-index: 12;
@@ -543,11 +535,18 @@
       }
       .party-chat-btn { display: inline-flex; }
       .party-faces.is-on {
-        left: 8px; right: 8px; width: auto; top: auto;
-        height: min(44%, 240px); bottom: 78px;
+        left: auto; right: 8px; top: 48px; bottom: 70px;
+        width: 88px; height: auto; max-height: calc(100% - 118px);
       }
-      .party-faces[data-count="1"] { height: min(48%, 260px); }
-      .party-tile-vol { width: 56px; }
+      .party-faces[data-count="1"],
+      .party-faces[data-count="2"],
+      .party-faces[data-count="3"],
+      .party-faces[data-count="4"] { width: 88px; height: auto; }
+      .party-faces[data-count="5"],
+      .party-faces[data-count="6"],
+      .party-faces[data-count="7"],
+      .party-faces[data-count="8"] { width: 168px; }
+      .party-tile-vol { display: none; }
       .player-page.party-on { grid-template-columns: 1fr; }
       .player-page.party-on .ep-sidebar { display: flex; }
       .party-dock {
@@ -567,6 +566,51 @@
       .ctrl-btn { width: 2.15rem; height: 2.15rem; }
       .time-display { font-size: .7rem; }
       .watch-channel { gap: 0.5rem; }
+    }
+    .video-wrapper:fullscreen,
+    .video-wrapper:-webkit-full-screen {
+      aspect-ratio: auto;
+      width: 100%;
+      height: 100%;
+      border-radius: 0;
+    }
+    @media (orientation: landscape) and (max-height: 540px) {
+      .player-body .navbar,
+      .player-body .bottom-nav { display: none !important; }
+      .watch-page {
+        padding: 0 !important;
+        max-width: none;
+        grid-template-columns: 1fr;
+        gap: 0;
+      }
+      .watch-title, .watch-channel, .watch-comments { display: none; }
+      .video-wrapper {
+        aspect-ratio: auto;
+        width: 100vw;
+        height: 100dvh;
+        max-height: 100dvh;
+        border-radius: 0;
+      }
+      .party-faces.is-on,
+      .party-faces[data-count="1"],
+      .party-faces[data-count="2"],
+      .party-faces[data-count="3"],
+      .party-faces[data-count="4"] {
+        left: auto !important;
+        right: 8px !important;
+        top: 10px !important;
+        bottom: 56px !important;
+        width: 76px !important;
+        height: auto !important;
+        max-height: calc(100% - 66px);
+      }
+      .party-faces[data-count="5"],
+      .party-faces[data-count="6"],
+      .party-faces[data-count="7"],
+      .party-faces[data-count="8"] {
+        width: 148px !important;
+      }
+      .custom-controls { padding: 1.4rem .7rem calc(.55rem + env(safe-area-inset-bottom)); }
     }
   </style>
 </head>
@@ -740,7 +784,7 @@ window.ANIMEE_SITE = {{ site_json|default:'{"player_poster":""}'|safe }};
 <div class="ep-scrim" id="epScrim"></div>
 
 <script src="{% static 'js/api.js' %}?v=animee90"></script>
-<script src="{% static 'js/party.js' %}?v=animee81"></script>
+<script src="{% static 'js/party.js' %}?v=animee83"></script>
 <script>
 const URLS = window.ANIMEE_URLS;
 window.ANIMEE_WATCH = {{ watch_json|default:'{}'|safe }};

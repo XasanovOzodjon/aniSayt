@@ -222,3 +222,52 @@ class PageSplitTests(TestCase):
         self.assertIn(b'listsRoot', lists.content)
         self.assertIn(b'profileRoot', profile.content)
         self.assertNotIn(b'listTabs', profile.content)
+
+
+class SearchAppearanceTests(TestCase):
+    def test_home_title_and_search_schema(self):
+        response = self.client.get('/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Animee.uz — Eng sara Kinolar, Animelar')
+        self.assertContains(response, 'application/ld+json')
+        self.assertContains(response, 'SearchAction')
+        self.assertContains(response, 'application/opensearchdescription+xml')
+        self.assertContains(response, 'favicon-32.png')
+        self.assertContains(response, 'yandex-verification')
+        self.assertContains(response, '05f3ccc1e05538fc')
+
+    def test_home_links_catalog_hubs(self):
+        response = self.client.get('/')
+        self.assertContains(response, 'href="/catalog/"')
+        self.assertContains(response, 'href="/catalog/anime/"')
+        self.assertContains(response, 'href="/catalog/drama/"')
+        self.assertContains(response, 'href="/catalog/kino/"')
+        self.assertContains(response, 'Katalog')
+        self.assertContains(response, 'Animelar')
+        self.assertContains(response, 'Dramalar')
+        self.assertContains(response, 'Kinolar')
+
+    def test_kind_hub_has_own_title(self):
+        response = self.client.get('/catalog/anime/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Animelar')
+        self.assertContains(response, 'rel="canonical"')
+
+    def test_robots_points_at_sitemap(self):
+        response = self.client.get('/robots.txt')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'Sitemap:', response.content)
+        self.assertIn(b'/sitemap.xml', response.content)
+
+    def test_sitemap_lists_kind_hubs(self):
+        response = self.client.get('/sitemap.xml')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '/catalog/')
+        self.assertContains(response, '/catalog/anime/')
+        self.assertContains(response, '/catalog/drama/')
+        self.assertContains(response, '/catalog/kino/')
+
+    def test_opensearch_advertises_catalog_search(self):
+        response = self.client.get('/opensearch.xml')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '/catalog/?q={searchTerms}')

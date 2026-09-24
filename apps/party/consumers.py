@@ -77,7 +77,8 @@ class PartyConsumer(AsyncJsonWebsocketConsumer):
         elif kind == 'signal':
             await self._signal(content)
         elif kind == 'camera':
-            await self._camera(bool(content.get('on')))
+            mic = content.get('mic')
+            await self._camera(bool(content.get('on')), None if mic is None else bool(mic))
 
     async def party_event(self, event):
         await self.send_json(event['payload'])
@@ -206,11 +207,14 @@ class PartyConsumer(AsyncJsonWebsocketConsumer):
             },
         )
 
-    async def _camera(self, on):
-        await database_sync_to_async(presence.set_camera)(self.code, self.user_id, on)
+    async def _camera(self, on, mic=None):
+        await database_sync_to_async(presence.set_media)(
+            self.code, self.user_id, camera=on, mic=mic,
+        )
         await self.group_send_event({
             'type': 'camera',
             'user_id': self.user_id,
             'on': on,
+            'mic': mic,
             'members': await database_sync_to_async(presence.members)(self.code),
         })

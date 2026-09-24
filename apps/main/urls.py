@@ -3,12 +3,16 @@ from django.urls import path
 from .views import (
     index, catalog, detail, player, title_page, watch_page, auth, profile, settings_page,
     notices_page, public_profile, party_lobby, party_join, dashboard_page, lists_page,
-    banned_page,
+    banned_page, robots_txt, sitemap_xml, opensearch_xml,
 )
 
 urlpatterns = [
+    path("robots.txt", robots_txt, name="robots"),
+    path("sitemap.xml", sitemap_xml, name="sitemap"),
+    path("opensearch.xml", opensearch_xml, name="opensearch"),
     path("", index, name="index"),
     path("catalog/", catalog, name="catalog"),
+    path("catalog/<str:kind>/", catalog, name="catalog_kind"),
     path("detail/", detail, name="detail"),
     path("player/", player, name="player"),
     path("party/", party_lobby, name="party_lobby"),

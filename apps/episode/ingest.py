@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 
 MAX_DOWNLOAD_BYTES = 4 * 1024 * 1024 * 1024
 CHUNK = 1024 * 1024
+UPLOAD_CHUNK = 4 * 1024 * 1024
+MAX_UPLOAD_CHUNK = 8 * 1024 * 1024
 TIMEOUT = 1200
 USER_AGENT = (
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
@@ -98,6 +100,10 @@ def scratch_dir():
     path = Path(raw)
     path.mkdir(parents=True, exist_ok=True)
     return str(path)
+
+
+def pending_upload_path(pk) -> str:
+    return os.path.join(scratch_dir(), f'upload-{int(pk)}.mp4')
 
 
 def set_progress(pk, pct, stage=''):
@@ -342,6 +348,19 @@ def ingest_video(pk):
 
     try:
         set_progress(pk, 1, 'start')
+        pending = pending_upload_path(pk)
+        if (not video.video) and os.path.isfile(pending) and os.path.getsize(pending) > 0:
+            name = cache.get(f'video-upload-name:{pk}') or os.path.basename(pending)
+            with open(pending, 'rb') as fh:
+                wrapped = File(fh, name=name)
+                wrapped.size = os.path.getsize(pending)
+                attach_file(video, uploaded=wrapped, on_progress=on_progress)
+                video.ingest_error = ''
+                video.save(update_fields=['video', 'ingest_error'])
+            try:
+                os.unlink(pending)
+            except OSError:
+                pass
         if video.source_url and not video.video:
             attach_file(video, source_url=video.source_url, on_progress=on_progress)
             video.ingest_error = ''

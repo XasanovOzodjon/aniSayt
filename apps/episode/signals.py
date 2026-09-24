@@ -24,15 +24,19 @@ def _spawn_ingest(pk):
     log_dir = scratch_dir()
     log_path = os.path.join(log_dir, f'ingest-{pk}.log')
     log = open(log_path, 'ab')
+    env = {**os.environ, 'DJANGO_SETTINGS_MODULE': 'core.settings'}
+    env['PYTHONPATH'] = str(settings.BASE_DIR) + (
+        os.pathsep + env['PYTHONPATH'] if env.get('PYTHONPATH') else ''
+    )
     subprocess.Popen(
-        [sys.executable, os.path.join(settings.BASE_DIR, 'apps', 'episode', 'run_ingest.py'), str(pk)],
+        [sys.executable, '-m', 'apps.episode.run_ingest', str(pk)],
         cwd=str(settings.BASE_DIR),
         stdin=subprocess.DEVNULL,
         stdout=log,
         stderr=log,
         start_new_session=True,
         close_fds=True,
-        env={**os.environ, 'DJANGO_SETTINGS_MODULE': 'core.settings'},
+        env=env,
     )
 
 

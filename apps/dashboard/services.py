@@ -4,9 +4,13 @@ from django.db.models import Count, Q
 from django.utils import timezone
 from django.utils.text import slugify
 
+import os
+
 from apps.anime.models import Anime, Genre, Season
 from apps.anime.paths import title_path, watch_path
-from apps.episode.ingest import IngestError, attach_file, get_progress, validate_source_url
+from apps.episode.ingest import (
+    IngestError, attach_file, get_progress, pending_upload_path, validate_source_url,
+)
 from apps.episode.models import Episode, Video
 from apps.party.models import WatchParty
 from apps.person.models import Person
@@ -166,18 +170,29 @@ def season_row(season, request=None):
 
 
 def video_payload(video):
+    from apps.episode.ingest import pending_upload_path
+    pending = False
+    pending_size = 0
+    path = pending_upload_path(video.pk)
+    try:
+        pending_size = os.path.getsize(path) if os.path.isfile(path) else 0
+        pending = pending_size > 0
+    except OSError:
+        pending = False
     if video.ingest_error:
         status = 'error'
     elif video.hls_path:
         status = 'ready'
     elif video.video:
         status = 'processing'
-    elif video.source_url:
+    elif video.source_url or pending:
         status = 'queued'
     else:
         status = 'empty'
     info = get_progress(video.pk)
     progress = 100 if video.hls_path else int(info.get('progress') or 0)
+    if pending and progress < 1:
+        progress = 1
     return {
         'id': video.id,
         'language': video.language,
@@ -558,6 +573,9 @@ def add_video(episode_id, data, files=None, request=None):
     source_url = (data.get('source_url') or data.get('video_url') or '').strip()
     if data.get('hls_path'):
         raise DashError('HLS yo‘lini yozmang. Video fayl yoki video havolasini yuboring')
+    chunked = str(data.get('chunked') or '').lower() in ('1', 'true', 'yes')
+    if chunked:
+        return start_video_upload(episode, data, request)
     video = Video(
         episode=episode,
         language=language,
@@ -565,6 +583,9 @@ def add_video(episode_id, data, files=None, request=None):
     )
     try:
         if uploaded:
+            size = int(getattr(uploaded, 'size', 0) or 0)
+            if size > 32 * 1024 * 1024:
+                raise IngestError('Katta faylni qismlab yuboring — sahifani yangilang')
             attach_file(video, uploaded=uploaded, source_url='')
         elif source_url:
             validate_source_url(source_url)
@@ -577,6 +598,88 @@ def add_video(episode_id, data, files=None, request=None):
         raise DashError(exc.message) from exc
     video.save()
     return get_anime(episode.season.anime_id, request)
+
+
+def start_video_upload(episode, data, request=None):
+    from django.core.cache import cache
+    from apps.episode.ingest import UPLOAD_CHUNK
+
+    name = (data.get('filename') or 'video.mp4').strip()[:80] or 'video.mp4'
+    if name.lower().endswith(('.m3u8', '.m3u')):
+        raise DashError('HLS fayl emas — video yuklang')
+    try:
+        size = int(data.get('size') or 0)
+    except (TypeError, ValueError):
+        size = 0
+    if size < 1:
+        raise DashError('Video hajmi kerak')
+    if size > 4 * 1024 * 1024 * 1024:
+        raise DashError('Video 4 GB dan katta')
+    video = Video(
+        episode=episode,
+        language=(data.get('language') or 'uz').strip()[:50],
+        translated_by=(data.get('translated_by') or '').strip()[:120],
+    )
+    video.save()
+    path = pending_upload_path(video.pk)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    open(path, 'wb').close()
+    cache.set(f'video-upload-name:{video.pk}', name, 24 * 3600)
+    cache.set(f'video-upload-size:{video.pk}', size, 24 * 3600)
+    payload = get_anime(episode.season.anime_id, request)
+    payload['upload'] = {'video_id': video.pk, 'chunk_size': UPLOAD_CHUNK}
+    return payload
+
+
+def write_video_chunk(pk, body, offset=0):
+    from apps.episode.ingest import MAX_UPLOAD_CHUNK
+
+    video = Video.objects.filter(pk=pk).first()
+    if not video:
+        raise DashError('Video topilmadi', 404)
+    if video.hls_path or video.video:
+        raise DashError('Video allaqachon yuklangan')
+    data = body if isinstance(body, (bytes, bytearray)) else bytes(body or b'')
+    if not data:
+        raise DashError('Bo‘sh qism')
+    if len(data) > MAX_UPLOAD_CHUNK:
+        raise DashError('Qism juda katta')
+    try:
+        offset = int(offset or 0)
+    except (TypeError, ValueError):
+        raise DashError('Noto‘g‘ri offset')
+    if offset < 0:
+        raise DashError('Noto‘g‘ri offset')
+    path = pending_upload_path(pk)
+    if not os.path.isfile(path):
+        raise DashError('Yuklash topilmadi', 404)
+    current = os.path.getsize(path)
+    if offset > current:
+        raise DashError('Qism tartibda emas')
+    if offset + len(data) > 4 * 1024 * 1024 * 1024:
+        raise DashError('Video 4 GB dan katta')
+    with open(path, 'r+b') as fh:
+        fh.seek(offset)
+        fh.write(data)
+    return {'received': offset + len(data)}
+
+
+def finish_video_upload(pk, request=None):
+    from apps.episode.ingest import ingest_video, set_progress
+    from apps.episode.signals import _spawn_ingest
+
+    video = Video.objects.select_related('episode__season').filter(pk=pk).first()
+    if not video:
+        raise DashError('Video topilmadi', 404)
+    path = pending_upload_path(pk)
+    if not os.path.isfile(path) or os.path.getsize(path) < 1:
+        raise DashError('Fayl bo‘sh')
+    set_progress(pk, 1, 'start')
+    if settings.TESTING:
+        ingest_video(pk)
+    else:
+        _spawn_ingest(pk)
+    return get_anime(video.episode.season.anime_id, request)
 
 
 def update_video(pk, data, request=None):
@@ -596,7 +699,13 @@ def delete_video(pk, request=None):
     if not video:
         raise DashError('Video topilmadi', 404)
     anime_id = video.episode.season.anime_id
+    path = pending_upload_path(video.pk)
     video.delete()
+    if os.path.isfile(path):
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
     return get_anime(anime_id, request)
 
 

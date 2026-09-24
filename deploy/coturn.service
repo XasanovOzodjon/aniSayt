@@ -1,0 +1,13 @@
+[Unit]
+Description=Animee coturn (Watch Party camera/mic)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/turnserver -c /etc/turnserver.conf
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

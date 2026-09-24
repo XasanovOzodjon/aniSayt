@@ -135,16 +135,23 @@ def count(code) -> int:
         return len(_mem_bucket(code))
 
 
-def set_camera(code, user_id, on: bool):
+def set_media(code, user_id, *, camera=None, mic=None):
     uid = str(user_id)
+
+    def apply(data):
+        if camera is not None:
+            data['camera'] = bool(camera)
+        if mic is not None:
+            data['mic'] = bool(mic)
+        return data
+
     client = _redis()
     if client is not None:
         try:
             raw = client.hget(_key(code), uid)
             if raw:
                 data = json.loads(raw)
-                data['camera'] = bool(on)
-                client.hset(_key(code), uid, json.dumps(data))
+                client.hset(_key(code), uid, json.dumps(apply(data)))
         finally:
             client.close()
         return
@@ -154,8 +161,11 @@ def set_camera(code, user_id, on: bool):
         if not row:
             return
         data = json.loads(row['raw'])
-        data['camera'] = bool(on)
-        row['raw'] = json.dumps(data)
+        row['raw'] = json.dumps(apply(data))
+
+
+def set_camera(code, user_id, on: bool):
+    set_media(code, user_id, camera=on)
 
 
 def has_user(code, user_id) -> bool:

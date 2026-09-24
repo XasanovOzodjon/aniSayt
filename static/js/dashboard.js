@@ -307,7 +307,7 @@ function videoReady(v) {
   if (v.hls_path) return v.hls_path.includes('.m3u8') ? 'Tayyor · HLS' : 'Tayyor';
   const pct = Number(v.progress) || 0;
   if (v.status === 'processing' || v.has_file) return `${pct}% · HLS qilinmoqda`;
-  if (v.status === 'queued' || v.source_url) return `${pct}% · S3 ga yozilmoqda`;
+  if (v.status === 'queued' || v.source_url) return `${pct}% · qabul qilindi`;
   return 'Video yo‘q';
 }
 
@@ -347,7 +347,7 @@ function videoFormHTML(episodeId) {
       <label>Video fayl <input type="file" name="video" accept="video/*"/></label>
       <label>Yoki internetdagi video havolasi <input name="source_url" placeholder="https://…/video.mp4"/></label>
       <div data-meter hidden></div>
-      <p class="settings-hint">Fayl yoki havola to‘g‘ridan-to‘g‘ri S3 ga yoziladi. Pastdagi chiziq to‘lguncha foiz ko‘rinadi, keyin HLS fonda tayyorlanadi.</p>
+      <p class="settings-hint">Katta fayl qismlab yuboriladi (server qotib 502 bo‘lmasin). Pastdagi chiziq to‘lguncha foiz ko‘rinadi, keyin HLS fonda tayyorlanadi.</p>
       <button class="btn-primary" type="submit">Videoni yuklash</button>
     </form>`;
 }
@@ -374,21 +374,34 @@ function bindVideoForms() {
           btn.disabled = true;
           btn.textContent = 'Yuklanmoqda…';
         }
-        setFormMeter(form, 1, file && file.size ? 'S3 ga yozilmoqda' : 'Qabul qilindi');
+        setFormMeter(form, 1, file && file.size ? 'Yuklanmoqda' : 'Qabul qilindi');
         if (file && file.size) {
-          await API.uploadWithProgress(
-            API.endpoints.dashVideos(form.dataset.video),
-            body,
-            (pct) => {
-              setFormMeter(form, pct, 'S3 ga yozilmoqda');
-              if (btn) btn.textContent = `${pct}%`;
-            },
-          );
+          const start = await API.post(API.endpoints.dashVideos(form.dataset.video), {
+            language: body.get('language') || 'uz',
+            translated_by: body.get('translated_by') || '',
+            filename: file.name,
+            size: file.size,
+            chunked: true,
+          });
+          const videoId = start.upload && start.upload.video_id;
+          const chunkSize = (start.upload && start.upload.chunk_size) || (4 * 1024 * 1024);
+          if (!videoId) throw new Error('Yuklash ochilmadi');
+          let sent = 0;
+          while (sent < file.size) {
+            const blob = file.slice(sent, sent + chunkSize);
+            await API.putBytes(`${API.endpoints.dashVideoChunk(videoId)}?offset=${sent}`, blob);
+            sent += blob.size;
+            const pct = Math.max(1, Math.round((sent / file.size) * 99));
+            setFormMeter(form, pct, 'Serverga yozilmoqda');
+            if (btn) btn.textContent = `${pct}%`;
+          }
+          setFormMeter(form, 99, 'HLS fonda tayyorlanadi');
+          await API.post(API.endpoints.dashVideoComplete(videoId), {});
         } else {
           await API.upload(API.endpoints.dashVideos(form.dataset.video), body);
         }
         setFormMeter(form, 100, 'Qabul qilindi');
-        Utils.toast('Video S3 ga ketdi — holat pastda yangilanadi', 'success');
+        Utils.toast('Video qabul qilindi — holat pastda yangilanadi', 'success');
         render();
       } catch (ex) {
         if (btn) {

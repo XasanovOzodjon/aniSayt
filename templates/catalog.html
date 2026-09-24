@@ -4,8 +4,8 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Katalog — Animee</title>
-  <link rel="stylesheet" href="{% static 'css/global.css' %}?v=animee120"/>
+  {% include "partials/seo.html" %}
+  <link rel="stylesheet" href="{% static 'css/global.css' %}?v=animee121"/>
   <style>
     .catalog-header {
       padding: 2.5rem 0 1.5rem;
@@ -236,23 +236,23 @@
 
     <!-- Header + Search -->
     <div class="catalog-header">
-      <h1>Katalog</h1>
+      <h1>{{ catalog_hub.label|default:"Katalog" }}</h1>
       <p class="search-kicker">検索 · darvoza</p>
       <div class="search-radar">
         <div class="search-radar-ring"></div>
-        <div class="search-bar-wrap">
+        <form class="search-bar-wrap" action="{% url 'catalog' %}" method="get" role="search">
           <span class="search-icon">◎</span>
-          <input type="text" class="search-bar" id="searchInput" placeholder="Ism, kayfiyat, janr… yoki / bosing"/>
-          <button class="search-clear" id="searchClear" onclick="clearSearch()">✕</button>
+          <input type="search" name="q" class="search-bar" id="searchInput" placeholder="Ism, kayfiyat, janr… yoki / bosing" value=""/>
+          <button type="button" class="search-clear" id="searchClear" onclick="clearSearch()">✕</button>
           <div class="search-suggestions" id="suggestions"></div>
-        </div>
+        </form>
       </div>
       <div class="kind-pills" id="kindPills">
-        <button type="button" class="active" data-kind="">Barchasi</button>
-        <button type="button" data-kind="anime">Anime</button>
-        <button type="button" data-kind="drama">Drama</button>
-        <button type="button" data-kind="film">Kino</button>
-        <button type="button" data-kind="serial">Serial</button>
+        <a href="{% url 'catalog' %}" class="{% if not catalog_kind %}active{% endif %}" data-kind="">Barchasi</a>
+        <a href="{% url 'catalog_kind' 'anime' %}" class="{% if catalog_kind == 'anime' %}active{% endif %}" data-kind="anime">Anime</a>
+        <a href="{% url 'catalog_kind' 'drama' %}" class="{% if catalog_kind == 'drama' %}active{% endif %}" data-kind="drama">Drama</a>
+        <a href="{% url 'catalog_kind' 'kino' %}" class="{% if catalog_kind == 'film' %}active{% endif %}" data-kind="film">Kino</a>
+        <a href="{% url 'catalog_kind' 'serial' %}" class="{% if catalog_kind == 'serial' %}active{% endif %}" data-kind="serial">Serial</a>
       </div>
     </div>
 
@@ -305,6 +305,12 @@
   </div>
 </div>
 
+<footer class="footer">
+  <div class="footer-logo">ANI<span>MEE</span></div>
+  {% include "partials/sitelinks.html" %}
+  <p>animee.uz — anime, drama, kino va serial. © 2026</p>
+</footer>
+
 <script src="{% static 'js/api.js' %}?v=animee90"></script>
 <script>
 const URLS = {
@@ -313,6 +319,7 @@ const URLS = {
   catalog: "{% url 'catalog' %}",
   player: "{% url 'player' %}",
 };
+window.ANIMEE_CATALOG_KIND = "{{ catalog_kind|default:'' }}";
 </script>
 <script>
 // ---- State ----
@@ -335,7 +342,8 @@ window.addEventListener('scroll', () => {
 // ---- URL params on load ----
 const urlParams = new URLSearchParams(window.location.search);
 if (urlParams.get('q')) { state.search = urlParams.get('q'); document.getElementById('searchInput').value = state.search; }
-if (urlParams.get('kind')) state.kind = urlParams.get('kind');
+if (window.ANIMEE_CATALOG_KIND) state.kind = window.ANIMEE_CATALOG_KIND;
+else if (urlParams.get('kind')) state.kind = urlParams.get('kind');
 const allowedSort = new Set(['-id', 'id', 'title', '-title']);
 if (allowedSort.has(urlParams.get('sort'))) {
   state.ordering = urlParams.get('sort');
@@ -356,6 +364,10 @@ function setFilter(key, value, el) {
 }
 
 function resetFilters() {
+  if (window.ANIMEE_CATALOG_KIND) {
+    location.href = URLS.catalog;
+    return;
+  }
   Object.keys(activeFilters).forEach(k => delete activeFilters[k]);
   state.genre = null; state.status = null; state.year = null; state.search = ''; state.kind = null;
   state.page = 1;
@@ -363,7 +375,7 @@ function resetFilters() {
   document.getElementById('searchClear').classList.remove('visible');
   document.querySelectorAll('.filter-opt, .genre-tag').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.filter-opt:first-child').forEach(el => el.classList.add('active'));
-  document.querySelectorAll('#kindPills button').forEach(el => el.classList.toggle('active', el.dataset.kind === ''));
+  document.querySelectorAll('#kindPills [data-kind]').forEach(el => el.classList.toggle('active', el.dataset.kind === ''));
   loadAnimes();
 }
 
@@ -533,13 +545,8 @@ document.addEventListener('click', (e) => {
   if (!e.target.closest('.search-bar-wrap')) hideSuggestions();
 });
 
-document.querySelectorAll('#kindPills button').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('#kindPills button').forEach((el) => el.classList.toggle('active', el === btn));
-    state.kind = btn.dataset.kind || null;
-    state.page = 1;
-    loadAnimes();
-  });
+document.querySelectorAll('#kindPills [data-kind]').forEach((el) => {
+  el.classList.toggle('active', (el.dataset.kind || '') === (state.kind || ''));
 });
 
 // ---- INIT ----
@@ -555,7 +562,7 @@ loadGenres().then(() => {
     document.querySelector('.year-details')?.setAttribute('open', '');
   }
   if (state.kind) {
-    document.querySelectorAll('#kindPills button').forEach((el) => {
+    document.querySelectorAll('#kindPills [data-kind]').forEach((el) => {
       el.classList.toggle('active', el.dataset.kind === state.kind);
     });
   }

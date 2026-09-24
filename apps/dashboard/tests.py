@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from unittest.mock import patch
 
 from apps.anime.models import Anime
@@ -202,6 +202,62 @@ class DashboardApiTests(TestCase):
         self.assertEqual(row['progress'], 0)
         spawn.assert_called()
 
+    def test_chunked_video_upload_spools_to_disk(self):
+        import os
+        import tempfile
+
+        gif = _tiny_gif()
+        res = self.client.post('/uz/api/dashboard/catalog/', {
+            'title': 'Clip',
+            'description': 'Tavsif',
+            'kind': 'drama',
+            'poster': gif,
+        }, format='multipart')
+        season = self.client.post(f'/uz/api/dashboard/catalog/{res.json()["id"]}/seasons/', {
+            'number': 1, 'release_date': 2026,
+        }, format='json')
+        sid = season.json()['id']
+        ep = self.client.post(f'/uz/api/dashboard/seasons/{sid}/episodes/', {
+            'number': 1, 'title': '1-qism',
+        }, format='json')
+        eid = ep.json()['episodes'][0]['id']
+        payload = b'0123456789abcdef'
+        with tempfile.TemporaryDirectory() as tmp:
+            with override_settings(INGEST_SCRATCH=tmp):
+                start = self.client.post(
+                    f'/uz/api/dashboard/episodes/{eid}/videos/',
+                    {'language': 'uz', 'filename': 'film.mp4', 'size': len(payload), 'chunked': True},
+                    format='json',
+                )
+                self.assertEqual(start.status_code, 201, start.content)
+                vid = start.json()['upload']['video_id']
+                self.assertTrue(vid)
+                first = self.client.put(
+                    f'/uz/api/dashboard/videos/{vid}/chunk/?offset=0',
+                    data=payload[:8],
+                    content_type='application/octet-stream',
+                )
+                self.assertEqual(first.status_code, 200, first.content)
+                second = self.client.put(
+                    f'/uz/api/dashboard/videos/{vid}/chunk/?offset=8',
+                    data=payload[8:],
+                    content_type='application/octet-stream',
+                )
+                self.assertEqual(second.status_code, 200, second.content)
+                spool = os.path.join(tmp, f'upload-{vid}.mp4')
+                self.assertEqual(open(spool, 'rb').read(), payload)
+
+                def fake_convert(instance):
+                    instance.hls_path = '/media/hls/%s/master.m3u8' % instance.id
+                    instance.save(update_fields=['hls_path'])
+
+                with patch('apps.episode.ingest.convert_to_hls', fake_convert):
+                    done = self.client.post(f'/uz/api/dashboard/videos/{vid}/complete/')
+                self.assertEqual(done.status_code, 200, done.content)
+                row = self.client.get(f'/uz/api/dashboard/seasons/{sid}/').json()['episodes'][0]['videos'][0]
+                self.assertTrue(row['hls_path'])
+                self.assertFalse(os.path.isfile(spool))
+
     def test_broadcast_and_roles(self):
         res = self.client.post('/uz/api/dashboard/notices/', {
             'title': 'Texnik tanaffus',
@@ -362,6 +418,53 @@ class IngestProgressTests(TestCase):
         set_progress(99, 40, 's3')
         self.assertEqual(get_progress(99)['progress'], 40)
         self.assertEqual(get_progress(99)['stage'], 's3')
+
+    def test_run_ingest_script_finds_django_settings(self):
+        import os
+        import subprocess
+        import sys
+        from pathlib import Path
+        from django.conf import settings
+
+        script = Path(settings.BASE_DIR) / 'apps' / 'episode' / 'run_ingest.py'
+        env = {k: v for k, v in os.environ.items() if k != 'PYTHONPATH'}
+        # Production spawn sets PYTHONPATH=BASE_DIR. That must not leave
+        # apps/episode first on sys.path, or `import apps` loads episode/apps.py.
+        env['PYTHONPATH'] = str(settings.BASE_DIR)
+        env['DJANGO_SETTINGS_MODULE'] = 'core.settings'
+        result = subprocess.run(
+            [sys.executable, str(script)],
+            cwd=str(settings.BASE_DIR),
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        self.assertNotIn("No module named 'core'", result.stderr)
+        self.assertNotIn("'apps' is not a package", result.stderr)
+        self.assertIn('IndexError', result.stderr)
+
+    def test_pending_file_is_queued_not_missing(self):
+        import os
+        import tempfile
+        from apps.anime.models import Season
+        from apps.dashboard.services import video_payload
+        from apps.episode.ingest import pending_upload_path
+
+        anime = Anime.objects.create(
+            title='Pending', description='Tavsif', kind='film', poster=_tiny_gif(),
+        )
+        season = Season.objects.create(anime=anime, number=1, release_date=2026)
+        episode = Episode.objects.create(season=season, number=1, title='1-qism')
+        video = Video.objects.create(episode=episode, language='uz')
+        with tempfile.TemporaryDirectory() as tmp:
+            with override_settings(INGEST_SCRATCH=tmp):
+                path = pending_upload_path(video.pk)
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, 'wb') as fh:
+                    fh.write(b'1234')
+                row = video_payload(video)
+        self.assertEqual(row['status'], 'queued')
+        self.assertGreater(row['progress'], 0)
 
     def test_hls_disk_full_keeps_file_and_does_not_look_like_download_failure(self):
         from apps.anime.models import Season

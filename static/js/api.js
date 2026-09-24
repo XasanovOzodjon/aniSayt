@@ -45,6 +45,8 @@ const API = {
     dashEpisode:  (id) => `${API.BASE_URL}/dashboard/episodes/${id}/`,
     dashVideos:   (id) => `${API.BASE_URL}/dashboard/episodes/${id}/videos/`,
     dashVideo:    (id) => `${API.BASE_URL}/dashboard/videos/${id}/`,
+    dashVideoChunk: (id) => `${API.BASE_URL}/dashboard/videos/${id}/chunk/`,
+    dashVideoComplete: (id) => `${API.BASE_URL}/dashboard/videos/${id}/complete/`,
     dashGenres:   () => `${API.BASE_URL}/dashboard/genres/`,
     dashGenre:    (id) => `${API.BASE_URL}/dashboard/genres/${id}/`,
     dashPeople:   () => `${API.BASE_URL}/dashboard/people/`,
@@ -121,6 +123,30 @@ const API = {
 
   async put(url, body) {
     return this._send('PUT', url, body);
+  },
+
+  async putBytes(url, blob) {
+    const send = async (force) => {
+      if (force && typeof Auth !== 'undefined') await Auth.ensureAccess(true);
+      const headers = await this._headers(false);
+      headers['Content-Type'] = 'application/octet-stream';
+      const res = await fetch(url, { method: 'PUT', headers, body: blob });
+      const data = await res.json().catch(() => ({}));
+      return { ok: res.ok, status: res.status, data };
+    };
+    let last = { ok: false, status: 0, data: {} };
+    for (let i = 0; i < 5; i += 1) {
+      last = await send(false);
+      if (last.status === 401) last = await send(true);
+      if (last.ok) return last.data;
+      if ([0, 502, 503, 504].includes(Number(last.status)) && i < 4) {
+        await new Promise((resolve) => setTimeout(resolve, 700 * (i + 1)));
+        continue;
+      }
+      break;
+    }
+    this._fail({ status: last.status }, last.data || {});
+    return last.data;
   },
 
   async delete(url) {

@@ -2094,6 +2094,7 @@ body.portal-open { overflow: hidden; }
   gap: 0.4rem;
   margin: 0.85rem 0 0.2rem;
 }
+.kind-pills a,
 .kind-pills button {
   padding: 0.4rem 0.85rem;
   border-radius: 999px;
@@ -2103,6 +2104,7 @@ body.portal-open { overflow: hidden; }
   font-weight: 700;
   font-size: 0.82rem;
 }
+.kind-pills a.active,
 .kind-pills button.active {
   background: var(--accent-dim);
   border-color: var(--accent);
@@ -2393,6 +2395,19 @@ body.portal-open { overflow: hidden; }
   margin-bottom: 0.35rem;
 }
 .footer-logo span { color: var(--accent); }
+.footer-nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.65rem 1.2rem;
+  margin: 0.9rem 0 0.55rem;
+}
+.footer-nav a {
+  color: var(--text-secondary);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+.footer-nav a:hover { color: var(--accent); }
 
 .sakura {
   position: fixed;

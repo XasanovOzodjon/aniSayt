@@ -259,6 +259,15 @@ class PresenceTests(TestCase):
         self.assertTrue(self.presence.is_full('full', 99))
         self.assertFalse(self.presence.is_full('full', 1))
 
+    def test_members_include_mic_after_set_media(self):
+        self.presence.remember('room', {'id': 7, 'username': 'a', 'camera': False, '_ch': 'ch'})
+        self.presence.set_media('room', 7, camera=True, mic=True)
+        members = self.presence.members('room')
+        self.assertEqual(len(members), 1)
+        self.assertTrue(members[0]['camera'])
+        self.assertTrue(members[0]['mic'])
+        self.assertNotIn('_ch', members[0])
+
 
 class IceServersTests(TestCase):
     def test_stun_only_without_turn(self):
@@ -351,6 +360,15 @@ class PartySocketTests(TransactionTestCase):
         while pong.get('type') != 'pong':
             pong = await mate_ws.receive_json_from()
         self.assertTrue(pong['party']['want_playing'])
+
+        await mate_ws.send_json_to({'type': 'camera', 'on': True, 'mic': True})
+        cam = await host_ws.receive_json_from()
+        while cam.get('type') != 'camera':
+            cam = await host_ws.receive_json_from()
+        self.assertTrue(cam['on'])
+        mate_row = next(m for m in cam['members'] if m['id'] == self.mate.pk)
+        self.assertTrue(mate_row['camera'])
+        self.assertTrue(mate_row['mic'])
 
         await mate_ws.disconnect()
         leave = await host_ws.receive_json_from()

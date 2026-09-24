@@ -214,6 +214,8 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 INGEST_SCRATCH = config('INGEST_SCRATCH', default=str(BASE_DIR / 'scratch'))
+Path(INGEST_SCRATCH).mkdir(parents=True, exist_ok=True)
+FILE_UPLOAD_TEMP_DIR = INGEST_SCRATCH
 DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 

@@ -1,4 +1,4 @@
-from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
+from rest_framework.parsers import BaseParser, FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
@@ -6,6 +6,13 @@ from drf_spectacular.utils import extend_schema
 
 from . import services
 from .permissions import IsAdminOnly, IsDashboardStaff
+
+
+class OctetParser(BaseParser):
+    media_type = 'application/octet-stream'
+
+    def parse(self, stream, media_type=None, parser_context=None):
+        return stream.read()
 
 
 class DashView(APIView):
@@ -166,6 +173,30 @@ class VideoDetailView(DashView):
     def delete(self, request, pk):
         try:
             return Response(services.delete_video(pk, request))
+        except services.DashError as exc:
+            return self.fail(exc)
+
+
+class VideoChunkView(DashView):
+    parser_classes = [OctetParser]
+
+    @extend_schema(tags=['Dashboard'])
+    def put(self, request, pk):
+        try:
+            return Response(services.write_video_chunk(
+                pk,
+                request.data if isinstance(request.data, (bytes, bytearray)) else request.body,
+                request.query_params.get('offset') or 0,
+            ))
+        except services.DashError as exc:
+            return self.fail(exc)
+
+
+class VideoCompleteView(DashView):
+    @extend_schema(tags=['Dashboard'])
+    def post(self, request, pk):
+        try:
+            return Response(services.finish_video_upload(pk, request))
         except services.DashError as exc:
             return self.fail(exc)
 

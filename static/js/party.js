@@ -30,9 +30,12 @@ window.PartyRoom = {
   _retries: 0,
   _stateAt: 0,
   peerAudio: {},
+  remoteStreams: {},
   _audioWatch: {},
   _speakUntil: {},
   _speakRaf: 0,
+  _helloReady: null,
+  _helloResolve: null,
 
   loginNext() {
     const next = location.pathname + location.search;
@@ -87,13 +90,24 @@ window.PartyRoom = {
       await loadEpisode(data.episode.id, { silent: true });
     }
     await this.connect(code);
+    try {
+      await Promise.race([
+        this._helloReady,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000)),
+      ]);
+    } catch {
+      Utils.toast('Xonaga ulanmadi', 'error');
+      return;
+    }
     if (granted.cam || granted.mic) {
       this.camOn = granted.cam;
       this.micOn = granted.mic;
       await this.syncMedia();
-      this.send({ type: 'camera', on: this.camOn });
+      this.sendMedia();
       document.getElementById('partyCamBtn')?.classList.toggle('is-on', this.camOn);
       document.getElementById('partyMicBtn')?.classList.toggle('is-on', this.micOn);
+    } else {
+      await this.ensureMesh();
     }
   },
 
@@ -103,6 +117,7 @@ window.PartyRoom = {
     this.code = code;
     this.active = true;
     this._closedByUs = false;
+    this._helloReady = new Promise((resolve) => { this._helloResolve = resolve; });
     this.layout(true);
     this.setPill(this._retries ? 'ULANMOQDA…' : 'BIRGALIKDA');
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
@@ -190,8 +205,16 @@ window.PartyRoom = {
         this.applyState(msg.party, { force: true });
         (msg.messages || []).forEach((row) => this.appendChat(row, false));
         this.renderMembers();
+        Object.keys(this.pcs).forEach((id) => {
+          const pc = this.pcs[id];
+          try { pc.close(); } catch { /* ignore */ }
+          delete this.pcs[id];
+        });
+        this.remoteStreams = {};
+        if (this.localStream) this.attachLocalTile();
         this.ensureMesh();
         this.layoutFaces();
+        this._helloResolve?.();
         break;
       case 'pong':
       case 'state':
@@ -232,7 +255,10 @@ window.PartyRoom = {
       case 'camera':
         this.members = msg.members || this.members;
         this.renderMembers();
-        if (!msg.on) this.clearRemoteTile(msg.user_id);
+        if (msg.user_id && msg.user_id !== this.me) {
+          const row = (this.members || []).find((m) => m.id === msg.user_id);
+          if (row && !row.camera && !row.mic) this.clearRemoteTile(msg.user_id);
+        }
         this.ensureMesh();
         break;
       case 'error':
@@ -391,7 +417,7 @@ window.PartyRoom = {
       const name = Utils.escapeHtml(m.username || 'User');
       return `<div class="party-member${m.id === this.me ? ' is-me' : ''}">
         <span class="party-member-ava">${photo ? `<img src="${photo}" alt="">` : name.slice(0, 1)}</span>
-        <span>${name}${m.host ? ' · host' : ''}${m.camera ? ' · kamera' : ''}</span>
+        <span>${name}${m.host ? ' · host' : ''}${m.camera ? ' · kamera' : ''}${m.mic ? ' · mik' : ''}</span>
       </div>`;
     }).join('');
   },
@@ -429,14 +455,19 @@ window.PartyRoom = {
   async toggleCamera() {
     this.camOn = !this.camOn;
     await this.syncMedia();
-    this.send({ type: 'camera', on: this.camOn });
+    this.sendMedia();
     document.getElementById('partyCamBtn')?.classList.toggle('is-on', this.camOn);
   },
 
   async toggleMic() {
     this.micOn = !this.micOn;
     await this.syncMedia();
+    this.sendMedia();
     document.getElementById('partyMicBtn')?.classList.toggle('is-on', this.micOn);
+  },
+
+  sendMedia() {
+    this.send({ type: 'camera', on: this.camOn, mic: this.micOn });
   },
 
   facesWanted() {
@@ -451,8 +482,8 @@ window.PartyRoom = {
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: this.camOn,
-        audio: this.micOn,
+        video: this.camOn ? { facingMode: 'user' } : false,
+        audio: this.micOn ? { echoCancellation: true, noiseSuppression: true, autoGainControl: true } : false,
       });
       this.stopLocal(true);
       this.localStream = stream;
@@ -487,7 +518,10 @@ window.PartyRoom = {
     if (!video) return;
     video.srcObject = this.localStream;
     video.muted = true;
-    video.play().catch(() => {});
+    video.playsInline = true;
+    video.setAttribute('playsinline', '');
+    video.setAttribute('webkit-playsinline', '');
+    this.playTile(video);
     this.watchAudio(this.me, this.localStream);
     this.layoutFaces();
   },
@@ -515,16 +549,12 @@ window.PartyRoom = {
     faces.dataset.count = String(n);
     faces.classList.toggle('is-on', n > 0);
     let cols = 1;
-    if (n === 2) cols = 2;
-    else if (n > 2 && n <= 4) cols = 2;
-    else if (n > 4) cols = 3;
-    const rows = n <= 1 ? 1 : Math.ceil(n / cols);
+    if (n >= 5) cols = 2;
+    const rows = Math.ceil(Math.max(n, 1) / cols);
     faces.style.setProperty('--party-cols', String(cols));
-    faces.style.setProperty('--party-rows', String(n === 3 ? 2 : rows));
+    faces.style.setProperty('--party-rows', String(rows));
     const tiles = [...faces.querySelectorAll('.party-tile')];
-    tiles.forEach((tile, i) => {
-      tile.style.gridColumn = (n === 3 && i === 2) ? '1 / -1' : '';
-    });
+    tiles.forEach((tile) => { tile.style.gridColumn = ''; });
   },
 
   peerAudioRow(id) {
@@ -683,8 +713,32 @@ window.PartyRoom = {
       const base = member?.username || (isLocal ? 'Siz' : '');
       name.textContent = isLocal ? (base === 'Siz' ? 'Siz' : `${base} · siz`) : base;
     }
+    const videoEl = wrap?.querySelector('video');
+    if (videoEl) {
+      videoEl.playsInline = true;
+      videoEl.setAttribute('playsinline', '');
+      videoEl.setAttribute('webkit-playsinline', '');
+      videoEl.autoplay = true;
+    }
     this.layoutFaces();
-    return wrap?.querySelector('video');
+    return videoEl;
+  },
+
+  playTile(video) {
+    if (!video) return;
+    const play = video.play();
+    if (play && play.catch) {
+      play.catch(() => { this._needUnlock = true; });
+    }
+  },
+
+  unlockMedia() {
+    if (this._audioCtx?.state === 'suspended') this._audioCtx.resume().catch(() => {});
+    document.querySelectorAll('#partyFaces video').forEach((el) => {
+      const play = el.play();
+      if (play && play.catch) play.catch(() => {});
+    });
+    this._needUnlock = false;
   },
 
   async ensurePeer(userId) {
@@ -704,14 +758,23 @@ window.PartyRoom = {
       }
     };
     pc.ontrack = (e) => {
-      const stream = e.streams[0] || new MediaStream([e.track]);
-      if (!stream) return;
+      let stream = e.streams && e.streams[0];
+      if (!stream) {
+        stream = this.remoteStreams[userId] || new MediaStream();
+        if (![...stream.getTracks()].includes(e.track)) stream.addTrack(e.track);
+      }
+      this.remoteStreams[userId] = stream;
       const member = (this.members || []).find((m) => m.id === userId) || { username: '' };
       const video = this.ensureTile(userId, member, false);
       if (video) {
-        video.srcObject = stream;
-        video.play().catch(() => {});
-        this.applyPeerAudio(userId);
+        if (video.srcObject !== stream) video.srcObject = stream;
+        video.muted = true;
+        const play = video.play();
+        if (play && play.then) {
+          play.then(() => this.applyPeerAudio(userId)).catch(() => { this._needUnlock = true; });
+        } else {
+          this.applyPeerAudio(userId);
+        }
       }
       if (stream.getAudioTracks().length) this.watchAudio(userId, stream);
     };
@@ -749,11 +812,18 @@ window.PartyRoom = {
   },
 
   async ensureMesh() {
-    if (!this.facesWanted()) return;
+    if (!this.active || !this.me) return;
     for (const member of this.members || []) {
       if (member.id === this.me) continue;
-      if (this.me < member.id) await this.renegotiate(member.id);
-      else await this.ensurePeer(member.id);
+      try {
+        if (this.me < member.id) await this.renegotiate(member.id);
+        else {
+          const pc = await this.ensurePeer(member.id);
+          this.addLocalTracks(pc);
+        }
+      } catch {
+        /* ignore */
+      }
     }
   },
 
@@ -854,6 +924,7 @@ window.PartyRoom = {
       this.send({ type: 'chat', body });
       input.value = '';
     });
+    document.getElementById('videoWrapper')?.addEventListener('pointerdown', () => this.unlockMedia(), { passive: true });
     window.addEventListener('online', () => {
       if (this.active && this.code && (!this.ws || this.ws.readyState !== WebSocket.OPEN)) {
         this.scheduleReconnect();
